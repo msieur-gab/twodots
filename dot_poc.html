@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Momentum of Product Development</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.18.0/matter.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* --- Basic Reset & Body Styles --- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-color: #f9fafb;
+            color: #1f2937;
+        }
+
+        /* --- Canvas & Layout --- */
+        #canvas-container {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 0;
+        }
+
+        canvas {
+            display: block;
+            touch-action: none;
+        }
+        
+        /* By default, main content area is click-through */
+        main {
+            position: relative;
+            z-index: 5;
+            pointer-events: none;
+        }
+        
+        /* The container for the cards re-enables clicks and creates space at the top */
+        .content-container {
+            pointer-events: auto;
+            background-color: rgba(249, 250, 251, 0.9);
+            backdrop-filter: blur(2px);
+            padding: 3rem 1.5rem;
+            /* FIX: Replaced the spacer div with a margin for a cleaner layout */
+            margin-top: 65vh; 
+        }
+        
+        .container {
+            max-width: 1280px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        /* --- Header --- */
+        .page-header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 10;
+            padding: 1.5rem;
+        }
+
+        .page-header h1 {
+            font-size: 2.25rem; /* 36px */
+            line-height: 2.5rem; /* 40px */
+            font-weight: 700;
+        }
+
+        .page-header p {
+            font-size: 1.125rem; /* 18px */
+            line-height: 1.75rem; /* 28px */
+            color: #4b5563; /* gray-600 */
+            margin-top: 0.5rem;
+        }
+
+        /* --- Card Grid & Individual Cards --- */
+        .card-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 2rem;
+        }
+
+        .card {
+            background-color: #ffffff;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            padding-top: 3rem; /* Make space for the offset number */
+            box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+            position: relative;
+            margin-top: 2rem; /* Space for the offset number */
+        }
+
+        .card__title {
+            font-size: 1.125rem; /* 18px */
+            line-height: 1.75rem; /* 28px */
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .card__description {
+            font-size: 0.875rem; /* 14px */
+            line-height: 1.25rem; /* 20px */
+            color: #4b5563;
+        }
+
+        /* --- Number Input Control --- */
+        .number-control {
+            position: absolute;
+            top: 0;
+            left: 80%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            background-color: transparent;
+            padding: 0 0.5rem;
+        }
+
+        .number-control__value {
+            font-size: 5rem; /* 80px */
+            font-weight: 900;
+            line-height: 1;
+        }
+
+        .number-control__buttons {
+            display: flex;
+            flex-direction: column;
+            margin-left: 0.5rem;
+        }
+
+        .number-control__button {
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-weight: 700;
+            color: #9ca3af; /* gray-400 */
+            transition: color 0.2s ease-in-out;
+            line-height: 0.8;
+        }
+        
+        .number-control__button:hover {
+            color: #1f2937; /* gray-800 */
+        }
+        
+        .number-control__button--plus {
+            font-size: 2.25rem; /* 36px */
+        }
+        
+        .number-control__button--minus {
+            font-size: 3rem; /* 48px */
+        }
+
+        /* --- Responsive Grid --- */
+        @media (min-width: 640px) {
+            .card-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .card-grid {
+                grid-template-columns: repeat(4, 1fr);
+            }
+             .page-header {
+                padding: 3rem;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="canvas-container"></div>
+    
+    <header class="page-header">
+        <div class="container">
+            <h1>Product Momentum</h1>
+            <p>An interactive analogy for startups & product owners.</p>
+        </div>
+    </header>
+
+    <main>
+        <!-- FIX: Removed the spacer div for a cleaner HTML structure -->
+        <div class="content-container">
+            <div class="container">
+                 <div class="card-grid">
+                    <!-- Card 1: Product Vision -->
+                    <article class="card card--vision control-card" data-control="vision">
+                        <div class="number-control">
+                             <span class="number-control__value">3</span>
+                             <div class="number-control__buttons">
+                                 <button class="number-control__button number-control__button--plus plus-btn">+</button>
+                                 <button class="number-control__button number-control__button--minus minus-btn">-</button>
+                             </div>
+                        </div>
+                        <h3 class="card__title">1. Product Vision</h3>
+                        <p class="card__description">A strong vision (4) allows for growth and adaptation, while a rigid one (5) can be too heavy.</p>
+                    </article>
+                    <!-- Card 2: Velocity -->
+                    <article class="card card--velocity control-card" data-control="velocity">
+                         <div class="number-control">
+                             <span class="number-control__value">3</span>
+                             <div class="number-control__buttons">
+                                 <button class="number-control__button number-control__button--plus plus-btn">+</button>
+                                 <button class="number-control__button number-control__button--minus minus-btn">-</button>
+                             </div>
+                        </div>
+                        <h3 class="card__title">2. Velocity</h3>
+                        <p class="card__description">Maximum speed (5) creates chaos. A controlled, average velocity (3) ensures alignment.</p>
+                    </article>
+                    <!-- Card 3: Friction -->
+                    <article class="card card--friction control-card" data-control="friction">
+                         <div class="number-control">
+                             <span class="number-control__value">3</span>
+                             <div class="number-control__buttons">
+                                 <button class="number-control__button number-control__button--plus plus-btn">+</button>
+                                 <button class="number-control__button number-control__button--minus minus-btn">-</button>
+                             </div>
+                        </div>
+                        <h3 class="card__title">3. Friction</h3>
+                        <p class="card__description">Healthy friction (2) from team collaboration provides stability. Zero creates chaos.</p>
+                    </article>
+                    <!-- Card 4: Sustainable Growth (Analysis) -->
+                    <article class="card card--growth">
+                        <h3 class="card__title">4. Sustainable Growth</h3>
+                        <p id="analysis-text" class="card__description">Adjust the parameters to see a real-time analysis of your product's growth potential.</p>
+                    </article>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Matter.js Module Aliases ---
+            const { Engine, Render, Runner, World, Bodies, Body, Constraint, Mouse, MouseConstraint, Events, Vector, Composite } = Matter;
+
+            // --- Basic Setup ---
+            const container = document.getElementById('canvas-container');
+            let width = window.innerWidth;
+            let height = window.innerHeight;
+
+            // --- Engine & Renderer ---
+            const engine = Engine.create();
+            const world = engine.world;
+            world.gravity.y = 1;
+
+            const render = Render.create({
+                element: container,
+                engine: engine,
+                canvas: document.createElement('canvas'),
+                options: { width: width, height: height, wireframes: false, background: 'transparent' }
+            });
+            
+            Render.lookAt(render, { min: { x: 0, y: 0 }, max: { x: width, y: height } });
+
+            Render.run(render);
+            const runner = Runner.create();
+            Runner.run(runner, engine);
+            
+            // --- State & Controls ---
+            const physicsControls = { vision: 3, velocity: 3, friction: 3 };
+            let balls = [];
+            let constraints = [];
+            const number_of_balls = 4;
+            let ball_size; 
+
+            // --- Control Card Logic ---
+            const controlCards = document.querySelectorAll('.control-card');
+            controlCards.forEach(card => {
+                const controlName = card.dataset.control;
+                const valueDisplay = card.querySelector('.number-control__value');
+                const plusBtn = card.querySelector('.plus-btn');
+                const minusBtn = card.querySelector('.minus-btn');
+                
+                valueDisplay.textContent = physicsControls[controlName];
+                
+                const update = () => {
+                    updatePhysics();
+                    updateAnalysis();
+                };
+
+                plusBtn.addEventListener('click', () => {
+                    if (physicsControls[controlName] < 5) {
+                        physicsControls[controlName]++;
+                        valueDisplay.textContent = physicsControls[controlName];
+                        update();
+                    }
+                });
+                
+                minusBtn.addEventListener('click', () => {
+                    if (physicsControls[controlName] > 0) {
+                        physicsControls[controlName]--;
+                        valueDisplay.textContent = physicsControls[controlName];
+                        update();
+                    }
+                });
+            });
+
+
+            // --- Core Simulation Functions ---
+
+            function calculateBallSize() {
+                ball_size = Math.max(40, Math.min(width * 0.05, 80));
+            }
+            
+            /**
+             * Sets up the interactive Newton's cradle directly.
+             */
+            function setupCradle() {
+                // Clear any existing objects and reset state
+                World.clear(world, false);
+                balls = [];
+                constraints = [];
+                World.add(world, mouseConstraint);
+
+                const length = height * 0.5;
+                const anchorY = 0;
+                const startX = width / 2 - (number_of_balls - 1.5) * ball_size;
+
+                // Create all balls at once in their final position
+                for (let i = 0; i < number_of_balls; i++) {
+                    const anchorX = startX + i * (ball_size * 2);
+                    // Place ball directly at its resting position
+                    const ball = Bodies.circle(anchorX, anchorY + length, ball_size, {
+                        render: {
+                            fillStyle: `hsl(0, 0%, ${75 - i * 15}%)`,
+                            lineWidth: 0
+                        },
+                        label: `ball-${i}`
+                    });
+
+                    const constraint = Constraint.create({
+                        pointA: { x: anchorX, y: anchorY },
+                        bodyB: ball,
+                        length: length,
+                        stiffness: 1, // Rigid constraint for the final cradle
+                        damping: 0,
+                        render: { visible: false }
+                    });
+                    
+                    balls.push(ball);
+                    constraints.push(constraint);
+                }
+
+                World.add(world, [...balls, ...constraints]);
+                
+                // Set the physics properties and analysis text
+                updatePhysics();
+                updateAnalysis();
+            }
+            
+            /**
+             * Updates the physical properties of the balls and world based on user controls.
+             */
+            function updatePhysics() {
+                if (balls.length !== number_of_balls) return;
+                
+                const { vision, velocity, friction } = physicsControls;
+                const isOptimal = vision === 4 && velocity === 3 && friction === 2;
+
+                engine.positionIterations = 10;
+                engine.velocityIterations = 10;
+                
+                const baseMass = 5;
+                const visionMassBonus = vision === 4 ? 45 : (vision / 5) * 40; 
+                const newMass = baseMass + visionMassBonus;
+                
+                if (balls[0]) Body.setMass(balls[0], newMass);
+                if (balls[1]) Body.setMass(balls[1], baseMass);
+                if (balls[2]) Body.setMass(balls[2], baseMass);
+                if (balls[3]) Body.setMass(balls[3], baseMass);
+
+                let velocityFactor;
+                if (velocity === 3) velocityFactor = 1.0; 
+                else if (velocity > 3) velocityFactor = 1.0 - (velocity - 3) * 0.15;
+                else velocityFactor = 0.5 + (velocity / 3) * 0.5;
+                
+                const finalRestitution = isOptimal ? 1 : 0.85 + velocityFactor * 0.149;
+
+                let finalFrictionAir;
+                let finalSlop = 0.05; 
+                
+                // Simplified friction logic as stiffness is now always 1
+                if (friction === 0) {
+                    finalFrictionAir = 0.005;
+                    constraints.forEach(c => { if(c) c.stiffness = 0.001; }); // Special case for chaos
+                } else {
+                     constraints.forEach(c => { if(c) c.stiffness = 1; });
+                    if (friction === 1) finalFrictionAir = 0.001;
+                    else if (friction === 2) finalFrictionAir = 0.0001;
+                    else finalFrictionAir = 0.0001 + ((friction - 2) / 3) * 0.008;
+                }
+                
+                if (isOptimal) {
+                    finalSlop = 0; 
+                }
+
+                balls.forEach(ball => {
+                    if (ball) {
+                        Body.set(ball, { restitution: finalRestitution, frictionAir: finalFrictionAir, friction: 0, slop: finalSlop });
+                    }
+                });
+            }
+            
+            /**
+             * Updates the analysis text based on the current physics settings.
+             */
+            function updateAnalysis() {
+                const { vision, velocity, friction } = physicsControls;
+                const analysisText = document.getElementById('analysis-text');
+                let summary = "";
+
+                if (vision === 4 && velocity === 3 && friction === 2) {
+                    summary = "Sustainable Growth! An adaptive vision, executed with controlled velocity and supported by healthy team friction, creates powerful, long-term momentum. Notice how energy is transferred cleanly through the team (balls 2 & 3).";
+                } 
+                else if (friction === 0) {
+                     summary = "Chaos. Without any friction for stability, the vision cannot be controlled. The result is unpredictable, wasted energy, regardless of vision or velocity.";
+                }
+                else {
+                    if (vision >= 4) summary += "The strong, adaptive vision provides an excellent foundation for growth. ";
+                    else if (vision <= 1) summary += "A weak vision provides very little initial impact, making growth difficult. ";
+                    else summary += "A solid vision gives the product a good starting point. ";
+
+                    if (velocity === 3) summary += "Controlled velocity ensures the team is aligned and energy is transferred efficiently. ";
+                    else if (velocity >= 4) summary += "Excessive velocity is causing misalignments and wasted effort, hindering momentum. ";
+                    else summary += "Low velocity means slow execution, and much of the vision's power is lost. ";
+
+                    if (friction === 2) summary += "Healthy internal friction leads to stable, predictable progress.";
+                    else if (friction >= 4) summary += "High friction from internal conflict is severely slowing down progress.";
+                    else if (friction === 1) summary += "A lack of team friction is creating some instability and minor inefficiencies.";
+                }
+                analysisText.textContent = summary;
+            }
+
+
+            // --- Mouse & Event Listeners ---
+
+            const mouse = Mouse.create(render.canvas);
+            const mouseConstraint = MouseConstraint.create(engine, {
+                mouse: mouse,
+                constraint: { stiffness: 0.2, render: { visible: false } }
+            });
+            
+            Events.on(engine, 'collisionStart', (event) => {
+                const { vision, velocity, friction } = physicsControls;
+                if (!(vision === 4 && velocity === 3 && friction === 2)) return;
+
+                if (balls.length !== number_of_balls) return;
+
+                const pairs = event.pairs;
+                for (let i = 0; i < pairs.length; i++) {
+                    const pair = pairs[i];
+                    const { bodyA, bodyB } = pair;
+
+                    // Case 1: Ball 0 hits Ball 1
+                    if ((bodyA.label === 'ball-0' && bodyB.label === 'ball-1') || (bodyA.label === 'ball-1' && bodyB.label === 'ball-0')) {
+                        const ball0 = bodyA.label === 'ball-0' ? bodyA : bodyB;
+                        if (ball0.velocity.x > 0.5) {
+                            pair.isActive = false;
+                            const velocityToTransfer = { x: ball0.velocity.x, y: ball0.velocity.y };
+                            setTimeout(() => {
+                                Body.setVelocity(balls[0], { x: 0, y: 0 });
+                                Body.setVelocity(balls[3], velocityToTransfer);
+                            }, 0);
+                        }
+                    }
+
+                    // Case 2: Ball 3 hits Ball 2
+                    if ((bodyA.label === 'ball-3' && bodyB.label === 'ball-2') || (bodyA.label === 'ball-2' && bodyB.label === 'ball-3')) {
+                        const ball3 = bodyA.label === 'ball-3' ? bodyA : bodyB;
+                        if (ball3.velocity.x < -0.5) {
+                            pair.isActive = false;
+                            const velocityToTransfer = { x: ball3.velocity.x, y: ball3.velocity.y };
+                            setTimeout(() => {
+                                Body.setVelocity(balls[3], { x: 0, y: 0 });
+                                Body.setVelocity(balls[0], velocityToTransfer);
+                            }, 0);
+                        }
+                    }
+                }
+            });
+
+            // --- Custom Rendering ---
+            // This event fires after the engine's default renderer has run.
+            // We use it to draw on top of the default rendering for a cleaner look.
+            Events.on(render, 'afterRender', () => {
+                const context = render.context;
+                context.save(); // Save the default context state
+
+                // 1. Draw the non-intersecting lines first (at the bottom layer)
+                context.beginPath();
+                for (const constraint of constraints) {
+                    if (constraint && constraint.bodyB) { 
+                        const { pointA, bodyB } = constraint;
+                        const ballRadius = bodyB.circleRadius; 
+                        
+                        // Calculate the point on the circle's edge where the line should stop
+                        const vector = Vector.sub(bodyB.position, pointA);
+                        const direction = Vector.normalise(vector);
+                        const connectionPoint = Vector.sub(bodyB.position, Vector.mult(direction, ballRadius));
+
+                        context.moveTo(pointA.x, pointA.y);
+                        context.lineTo(connectionPoint.x, connectionPoint.y);
+                    }
+                }
+                context.strokeStyle = '#9ca3af';
+                context.lineWidth = 2;
+                context.stroke();
+
+                // 2. Redraw the balls on top of the lines so they are not intersected
+                for (const ball of balls) {
+                    if (ball) {
+                        context.beginPath();
+                        context.arc(ball.position.x, ball.position.y, ball.circleRadius, 0, Math.PI * 2);
+                        context.fillStyle = ball.render.fillStyle;
+                        context.fill();
+                    }
+                }
+
+                // 3. Draw the numbers on top of the redrawn balls
+                context.font = 'bold 30px Inter';
+                context.fillStyle = '#fff';
+                context.textAlign = 'center';
+                context.textBaseline = 'middle';
+                
+                for (const ball of balls) {
+                    if (ball && ball.label.startsWith('ball-')) {
+                        const index = parseInt(ball.label.split('-')[1]);
+                        context.fillText(index + 1, ball.position.x, ball.position.y);
+                    }
+                }
+
+                context.restore(); // Restore the context state
+            });
+
+
+            const resizeCanvas = () => {
+                width = window.innerWidth;
+                height = window.innerHeight;
+                render.canvas.width = width;
+                render.canvas.height = height;
+                render.options.width = width;
+                render.options.height = height;
+                Render.lookAt(render, { min: { x: 0, y: 0 }, max: { x: width, y: height } });
+                calculateBallSize();
+                // Call setupCradle on resize to rebuild the simulation correctly
+                setupCradle();
+            };
+
+            window.addEventListener('resize', resizeCanvas);
+            
+            // --- Initial Kick-off ---
+            calculateBallSize();
+            // Call setupCradle on load to show the final state immediately
+            setupCradle();
+        });
+    </script>
+</body>
+</html>
