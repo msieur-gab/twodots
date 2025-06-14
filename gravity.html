@@ -172,15 +172,10 @@
             function gameLoop() {
                 if (isGameActive) {
                     // --- Physics Update ---
-                    // 1. Apply forces: constant gravity + tilt influence
                     ball.vx += tilt.x;
                     ball.vy += constantGravity + tilt.y;
-
-                    // 2. Apply friction
                     ball.vx *= friction;
                     ball.vy *= friction;
-
-                    // 3. Calculate next position
                     let nextX = ball.x + ball.vx;
                     let nextY = ball.y + ball.vy;
 
@@ -188,20 +183,16 @@
                     ctx.save();
                     ctx.translate(offsetX, offsetY);
                     ctx.scale(scale, scale);
-                    // Check if the ball's next center point is inside the path
                     if (ctx.isPointInPath(mazePath, nextX, nextY)) {
                         ball.x = nextX;
                         ball.y = nextY;
                     } else {
-                        // If it's going to be outside, stop it from moving further
-                        // This effectively makes the ball "collide" with the invisible wall
                         ball.vx = 0;
                         ball.vy = 0;
                     }
                     ctx.restore();
                     
                     // --- Check Win Condition ---
-                    // Calculate distance between ball and goal centers
                     const dx = (goal.x - ball.x) * scale;
                     const dy = (goal.y - ball.y) * scale;
                     const distance = Math.sqrt(dx * dx + dy * dy);
@@ -212,29 +203,20 @@
                 }
                 
                 // --- Drawing ---
-                ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear entire canvas
-
+                ctx.clearRect(0, 0, canvas.width, canvas.height); 
                 ctx.save();
-                // Apply the scaling and offset to all subsequent drawings
                 ctx.translate(offsetX, offsetY);
                 ctx.scale(scale, scale);
-
-                // Draw the maze path
-                ctx.fillStyle = '#cccccc'; // Light Gray
+                ctx.fillStyle = '#cccccc';
                 ctx.fill(mazePath);
-
-                // Draw the goal
                 ctx.beginPath();
                 ctx.arc(goal.x, goal.y, goal.radius / scale, 0, Math.PI * 2);
                 ctx.fillStyle = goal.color;
                 ctx.fill();
-
-                // Draw the ball
                 ctx.beginPath();
                 ctx.arc(ball.x, ball.y, ball.radius / scale, 0, Math.PI * 2);
                 ctx.fillStyle = ball.color;
                 ctx.fill();
-
                 ctx.restore();
 
                 requestAnimationFrame(gameLoop);
@@ -242,34 +224,65 @@
             
             // --- Control Setup ---
             function enableControls() {
-                if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') {
-                    // iOS 13+ requires explicit permission
-                    DeviceMotionEvent.requestPermission().then(response => {
-                        if (response === 'granted') addMotionListener();
+                // Use modern Sensor API first, with fallback
+                if ('AbsoluteOrientationSensor' in window) {
+                    try {
+                        const sensor = new AbsoluteOrientationSensor({ frequency: 60 });
+                        sensor.addEventListener('reading', () => {
+                            if (!isGameActive) return;
+                            const q = sensor.quaternion;
+                            let roll = Math.atan2(2 * (q[0] * q[1] + q[3] * q[2]), 1 - 2 * (q[1] * q[1] + q[2] * q[2])); 
+                            let pitch = Math.asin(2 * (q[0] * q[2] - q[3] * q[1])); 
+                            const maxTilt = Math.PI / 4; // 45 degrees in radians
+                            tilt.x = Math.max(-1, Math.min(1, roll / maxTilt)) * tiltMultiplier;
+                            tilt.y = Math.max(-1, Math.min(1, pitch / maxTilt)) * tiltMultiplier;
+                        });
+                        sensor.addEventListener('error', (event) => {
+                            console.error('Sensor error:', event.error.name, event.error.message);
+                            console.log('Falling back to legacy DeviceOrientationEvent.');
+                            addLegacyMotionListener(); 
+                        });
+                        sensor.start();
+                    } catch (error) {
+                        // This will catch the SecurityError if the policy disallows sensor construction
+                        console.error('Failed to construct AbsoluteOrientationSensor:', error.name, error.message);
+                        console.log('Falling back to legacy DeviceOrientationEvent due to construction error.');
+                        addLegacyMotionListener();
+                    }
+                } else if ('DeviceOrientationEvent' in window) {
+                    addLegacyMotionListener(); // Fallback for older browsers
+                } else {
+                    console.log("Device orientation sensors not supported by this browser.");
+                }
+            }
+            
+            // This is the old method, now used as a fallback
+            function addLegacyMotionListener() {
+                // iOS 13+ requires explicit permission for the legacy event
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission().then(permissionState => {
+                        if (permissionState === 'granted') {
+                            window.addEventListener('deviceorientation', handleOrientation);
+                        }
                     }).catch(console.error);
                 } else {
                     // For other devices, just add the listener
-                    addMotionListener();
+                    window.addEventListener('deviceorientation', handleOrientation);
                 }
             }
 
-            function addMotionListener() {
-                window.addEventListener('deviceorientation', (event) => {
-                    if (!isGameActive) return;
-                    const { beta, gamma } = event; // beta: front-back tilt, gamma: left-right tilt
-                    const maxTilt = 45; // Max tilt angle to consider
-                    
-                    // Calculate tilt influence, clamped between -1 and 1, then scaled
-                    tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt)) * tiltMultiplier;
-                    tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt)) * tiltMultiplier;
-                }, true);
+            function handleOrientation(event) {
+                if (!isGameActive) return;
+                const { beta, gamma } = event; // beta: front-back tilt, gamma: left-right tilt
+                const maxTilt = 45; 
+                tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt)) * tiltMultiplier;
+                tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt)) * tiltMultiplier;
             }
 
             document.addEventListener('keydown', event => {
                 if (!isGameActive) return;
-                const keyForce = 0.8; // How much force a key press applies
+                const keyForce = 0.8; 
                 switch (event.key) {
-                    // Apply an immediate impulse to the ball's velocity
                     case 'ArrowUp': ball.vy -= keyForce; break;
                     case 'ArrowDown': ball.vy += keyForce; break;
                     case 'ArrowLeft': ball.vx -= keyForce; break;
@@ -279,7 +292,7 @@
 
             // --- Event Listeners ---
             playAgainBtn.addEventListener('click', () => {
-                isGameActive = false; // Prevent movement while resetting
+                isGameActive = false; 
                 resetGame();
             });
             permissionBtn.addEventListener('click', () => {
