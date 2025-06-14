@@ -219,6 +219,14 @@
                 ctx.fill();
                 ctx.restore();
 
+                // --- Debug Display ---
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Poppins';
+                ctx.textAlign = 'right';
+                ctx.fillText(`Tilt X: ${tilt.x.toFixed(3)}`, canvas.width - 10, canvas.height - 25);
+                ctx.fillText(`Tilt Y: ${tilt.y.toFixed(3)}`, canvas.width - 10, canvas.height - 10);
+
+
                 requestAnimationFrame(gameLoop);
             }
             
