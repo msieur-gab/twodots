@@ -139,9 +139,8 @@
         let ball, goal;
         const engine = Engine.create();
         const world = engine.world;
-        // **FIX: Gravity is now controlled by sensors/keys, not constant.**
         engine.gravity.x = 0;
-        engine.gravity.y = 0;
+        engine.gravity.y = 0; // Gravity is now set by user input
 
         const render = Render.create({
             canvas: canvas,
@@ -221,7 +220,6 @@
             const ballX = (startPos.x * scale) + offsetX;
             const ballY = (startPos.y * scale) + offsetY;
             ball = Bodies.circle(ballX, ballY, ballRadius, {
-                // **FIX: Increased restitution for more bounce**
                 restitution: 0.4,
                 friction: 0.02,
                 render: { fillStyle: '#e74c3c' }
@@ -241,19 +239,15 @@
         }
         
         // --- Game Controls ---
-        const keys = {};
         document.addEventListener('keydown', (e) => {
-            keys[e.key] = true;
-            permissionModal.style.display = 'none'; // Hide modal on key press
-            // For desktop, set a default downward gravity on first keypress
-            if (engine.gravity.y === 0 && engine.gravity.x === 0) {
-                 engine.gravity.y = 1;
+            permissionModal.style.display = 'none'; 
+            switch (e.key) {
+                case 'ArrowUp': engine.gravity.y = -1; engine.gravity.x = 0; break;
+                case 'ArrowDown': engine.gravity.y = 1; engine.gravity.x = 0; break;
+                case 'ArrowLeft': engine.gravity.x = -1; engine.gravity.y = 0; break;
+                case 'ArrowRight': engine.gravity.x = 1; engine.gravity.y = 0; break;
             }
         });
-        document.addEventListener('keyup', (e) => keys[e.key] = false);
-
-        // This event listener is no longer needed as gravity is set directly
-        // Events.on(engine, 'beforeUpdate', handleControls);
 
         // --- Sensor API for Mobile ---
         function enableSensorControls() {
@@ -275,9 +269,9 @@
                         const roll = Math.atan2(2 * (q[0] * q[1] + q[3] * q[2]), 1 - 2 * (q[1] * q[1] + q[2] * q[2]));
                         const pitch = Math.asin(2 * (q[0] * q[2] - q[3] * q[1]));
                         const maxTilt = Math.PI / 4;
-                        // **FIX: Directly set the engine's gravity vector**
                         engine.gravity.x = Math.max(-1, Math.min(1, roll / maxTilt));
-                        engine.gravity.y = Math.max(-1, Math.min(1, pitch / maxTilt));
+                        // **FIX: Invert the pitch value to correct the gravity direction**
+                        engine.gravity.y = Math.max(-1, Math.min(1, -pitch / maxTilt));
                     });
                     sensor.start();
                 } catch (error) {
@@ -304,9 +298,9 @@
         function handleLegacyOrientation(event) {
             const { beta, gamma } = event;
             const maxTilt = 45;
-            // **FIX: Directly set the engine's gravity vector**
             engine.gravity.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
-            engine.gravity.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
+            // **FIX: Invert the beta value to correct the gravity direction**
+            engine.gravity.y = Math.max(-1, Math.min(1, -(beta || 0) / maxTilt));
         }
 
         // --- Event Listeners ---
