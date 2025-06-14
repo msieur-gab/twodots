@@ -94,7 +94,7 @@
             font-size: 12px;
             z-index: 50;
             border: 1px solid #333;
-            min-width: 200px;
+            min-width: 220px;
         }
         
         .debug-row {
@@ -110,6 +110,32 @@
         .debug-value {
             color: #fff;
             font-weight: bold;
+        }
+        
+        .rotation-indicator {
+            position: fixed;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            width: 60px;
+            height: 60px;
+            border: 2px solid #333;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        
+        .rotation-arrow {
+            width: 0;
+            height: 0;
+            border-left: 8px solid transparent;
+            border-right: 8px solid transparent;
+            border-bottom: 12px solid #e74c3c;
+            transform-origin: center;
+            transition: transform 0.1s ease;
         }
         
         .goal-indicator {
@@ -144,25 +170,29 @@
     <canvas id="gameCanvas"></canvas>
     
     <div class="controls-info">
-        <div class="instruction">🎮 <strong>Gravity Physics</strong></div>
-        <div class="instruction">📱 Tilt device to control gravity</div>
-        <div class="instruction">🔄 Rotate for different angles</div>
+        <div class="instruction">🎮 <strong>Rotation Physics</strong></div>
+        <div class="instruction">📱 Rotate device to change gravity</div>
+        <div class="instruction">🔒 Screen stays portrait</div>
         <div class="instruction">⌨️ Arrow keys for desktop</div>
     </div>
     
+    <div class="rotation-indicator">
+        <div class="rotation-arrow" id="rotation-arrow"></div>
+    </div>
+    
     <div class="goal-indicator">
-        🏁 Guide the ball to the green goal!
+        🏁 Rotate to guide the ball!
     </div>
     
     <div class="debug-panel">
-        <div style="text-align: center; color: #e74c3c; font-weight: bold; margin-bottom: 8px;">📱 Physics Debug</div>
+        <div style="text-align: center; color: #e74c3c; font-weight: bold; margin-bottom: 8px;">🧭 Rotation Debug</div>
         <div class="debug-row">
-            <span class="debug-label">Device Tilt:</span>
-            <span class="debug-value" id="tilt-display">0°, 0°</span>
+            <span class="debug-label">Device Rotation:</span>
+            <span class="debug-value" id="rotation-display">0°</span>
         </div>
         <div class="debug-row">
-            <span class="debug-label">Orientation:</span>
-            <span class="debug-value" id="orientation-display">0°</span>
+            <span class="debug-label">Relative Angle:</span>
+            <span class="debug-value" id="relative-display">0°</span>
         </div>
         <div class="debug-row">
             <span class="debug-label">Gravity X:</span>
@@ -177,19 +207,23 @@
             <span class="debug-value" id="speed-display">0.0</span>
         </div>
         <div class="debug-row">
-            <span class="debug-label">Sensor:</span>
+            <span class="debug-label">Compass:</span>
             <span class="debug-value" id="sensor-status">❌</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Raw Alpha:</span>
+            <span class="debug-value" id="raw-alpha">0°</span>
         </div>
     </div>
     
     <div id="permission-modal" class="modal">
         <div class="modal-content">
-            <h2>🌍 Gravity Path Runner</h2>
-            <p>Experience real-world physics! Tilt your device to control gravity and guide the ball through the maze.</p>
+            <h2>🧭 Gravity Rotation Runner</h2>
+            <p>Control gravity by rotating your device! The screen stays portrait, but gravity follows your device's rotation.</p>
             <div style="margin: 20px 0;">
                 <p><strong>🎯 Goal:</strong> Get the red ball to the green circle</p>
-                <p><strong>📱 Controls:</strong> Tilt your device in any direction</p>
-                <p><strong>🔄 Advanced:</strong> Try rotating your device for different angles</p>
+                <p><strong>🔄 Controls:</strong> Physically rotate your device</p>
+                <p><strong>🔒 Note:</strong> Screen stays locked in portrait mode</p>
             </div>
             <button id="permission-btn">🚀 Start Game</button>
         </div>
@@ -197,9 +231,9 @@
 
     <div id="win-modal" class="modal">
         <div class="modal-content">
-            <h2>🎉 Amazing!</h2>
-            <p>You successfully navigated the gravity maze!</p>
-            <p>Your mastery of physics is impressive!</p>
+            <h2>🎉 Master of Rotation!</h2>
+            <p>You successfully mastered gravity control!</p>
+            <p>Your device rotation skills are incredible!</p>
             <button id="play-again-btn">🎮 Play Again</button>
         </div>
     </div>
@@ -215,27 +249,39 @@
             const playAgainBtn = document.getElementById('play-again-btn');
             const permissionModal = document.getElementById('permission-modal');
             const permissionBtn = document.getElementById('permission-btn');
+            const rotationArrow = document.getElementById('rotation-arrow');
             
             // Debug displays
-            const tiltDisplay = document.getElementById('tilt-display');
-            const orientationDisplay = document.getElementById('orientation-display');
+            const rotationDisplay = document.getElementById('rotation-display');
+            const relativeDisplay = document.getElementById('relative-display');
             const gravityXDisplay = document.getElementById('gravity-x-display');
             const gravityYDisplay = document.getElementById('gravity-y-display');
             const speedDisplay = document.getElementById('speed-display');
             const sensorStatus = document.getElementById('sensor-status');
+            const rawAlphaDisplay = document.getElementById('raw-alpha');
 
             // Game state
             let ball, goal;
             let deviceState = {
-                tiltX: 0,      // Left/right tilt (-1 to 1)
-                tiltY: 0,      // Forward/back tilt (-1 to 1)
-                orientation: 0, // Device rotation (0, 90, 180, 270)
-                sensorActive: false
+                currentRotation: 0,     // Current device rotation angle (0-360)
+                baselineRotation: 0,    // Initial rotation when game started
+                relativeRotation: 0,    // Rotation relative to baseline
+                sensorActive: false,
+                lastAlpha: null
             };
             
             let particles = [];
             const engine = Engine.create();
             const world = engine.world;
+
+            // Lock screen orientation to portrait
+            function lockOrientation() {
+                if (screen.orientation && screen.orientation.lock) {
+                    screen.orientation.lock('portrait-primary').catch(err => {
+                        console.log('Could not lock orientation:', err);
+                    });
+                }
+            }
 
             // Enhanced render setup
             const render = Render.create({
@@ -253,7 +299,7 @@
 
             const runner = Runner.create();
 
-            // SVG maze data (simplified for better performance)
+            // SVG maze data
             const svgData = `
                 <svg xmlns="http://www.w3.org/2000/svg">
                     <rect x="9.05127" y="0.0375977" width="20" height="117.007" fill="#D9D9D9"/>
@@ -386,10 +432,10 @@
                 const ballY = (startPos.y * scale) + offsetY;
                 
                 ball = Bodies.circle(ballX, ballY, ballRadius, {
-                    restitution: 0.4,        // Bounce
-                    friction: 0.6,           // Rolling friction
-                    frictionAir: 0.01,       // Air resistance
-                    density: 0.8,            // Mass distribution
+                    restitution: 0.4,
+                    friction: 0.6,
+                    frictionAir: 0.01,
+                    density: 0.8,
                     render: {
                         fillStyle: '#e74c3c',
                         strokeStyle: '#c0392b',
@@ -440,73 +486,48 @@
                 World.add(world, [ball, goal, ...mazeWalls, ...boundaries]);
             }
 
-            // IMPROVED GRAVITY CALCULATION
-            function calculateGravity() {
-                // Start with base gravity pointing down
-                let gravityX = 0;
-                let gravityY = 1;
-                
-                // Get device tilt values
-                const tiltX = deviceState.tiltX;
-                const tiltY = deviceState.tiltY;
-                const orientation = deviceState.orientation;
-                
-                // Calculate gravity magnitude based on tilt
+            // ROTATION-BASED GRAVITY CALCULATION
+            function calculateGravityFromRotation() {
+                // Use relative rotation to calculate gravity direction
+                const rotationRadians = deviceState.relativeRotation * (Math.PI / 180);
                 const gravityMagnitude = 0.9;
-                const maxTiltAngle = 45; // degrees
                 
-                // Convert tilt to angles (in radians)
-                const tiltAngleX = (tiltX * maxTiltAngle) * (Math.PI / 180);
-                const tiltAngleY = (tiltY * maxTiltAngle) * (Math.PI / 180);
-                
-                // Calculate gravity components based on device orientation
-                switch(orientation) {
-                    case 0:   // Portrait (normal)
-                        gravityX = Math.sin(tiltAngleX) * gravityMagnitude;
-                        gravityY = Math.cos(tiltAngleX) * gravityMagnitude;
-                        break;
-                        
-                    case 90:  // Landscape (rotated left)
-                        gravityX = -Math.sin(tiltAngleY) * gravityMagnitude;
-                        gravityY = Math.sin(tiltAngleX) * gravityMagnitude;
-                        break;
-                        
-                    case 180: // Portrait upside-down
-                        gravityX = -Math.sin(tiltAngleX) * gravityMagnitude;
-                        gravityY = -Math.cos(tiltAngleX) * gravityMagnitude;
-                        break;
-                        
-                    case 270: // Landscape (rotated right)
-                        gravityX = Math.sin(tiltAngleY) * gravityMagnitude;
-                        gravityY = -Math.sin(tiltAngleX) * gravityMagnitude;
-                        break;
-                        
-                    default:
-                        // Handle in-between orientations
-                        gravityX = Math.sin(tiltAngleX) * gravityMagnitude;
-                        gravityY = Math.cos(tiltAngleX) * gravityMagnitude;
-                }
+                // Calculate gravity components based on device rotation
+                // 0° = gravity down, 90° = gravity right, 180° = gravity up, 270° = gravity left
+                const gravityX = Math.sin(rotationRadians) * gravityMagnitude;
+                const gravityY = Math.cos(rotationRadians) * gravityMagnitude;
                 
                 return { x: gravityX, y: gravityY };
             }
 
-            // Control handling with improved physics
+            // Control handling - now rotation-only
             function handleControls() {
                 if (!ball) return;
 
-                // Handle keyboard controls for desktop testing
+                // Handle keyboard controls for desktop testing (simulate rotation)
                 const keys = getCurrentKeys();
-                if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
-                    deviceState.tiltX = keys.ArrowRight ? 0.5 : keys.ArrowLeft ? -0.5 : 0;
-                    deviceState.tiltY = keys.ArrowDown ? 0.5 : keys.ArrowUp ? -0.5 : 0;
+                if (keys.ArrowLeft || keys.ArrowRight) {
+                    // Simulate rotation with arrow keys
+                    const rotationSpeed = 2; // degrees per frame
+                    if (keys.ArrowLeft) {
+                        deviceState.relativeRotation -= rotationSpeed;
+                    }
+                    if (keys.ArrowRight) {
+                        deviceState.relativeRotation += rotationSpeed;
+                    }
+                    
+                    // Keep rotation in 0-360 range
+                    if (deviceState.relativeRotation < 0) deviceState.relativeRotation += 360;
+                    if (deviceState.relativeRotation >= 360) deviceState.relativeRotation -= 360;
                 }
 
-                // Calculate and apply gravity
-                const gravity = calculateGravity();
+                // Calculate and apply gravity based on rotation
+                const gravity = calculateGravityFromRotation();
                 engine.world.gravity.x = gravity.x;
                 engine.world.gravity.y = gravity.y;
 
-                // Update debug displays
+                // Update visual indicators and debug display
+                updateRotationIndicator();
                 updateDebugDisplay(gravity);
             }
 
@@ -522,9 +543,10 @@
             });
             document.addEventListener('keyup', (e) => keyState[e.key] = false);
 
-            // Device orientation handling
+            // Device orientation handling - FIXED FOR ROTATION-ONLY
             function enableSensorControls() {
-                console.log('Enabling device sensors...');
+                console.log('Enabling device rotation sensors...');
+                lockOrientation(); // Lock screen to portrait
                 
                 // Request permission on iOS 13+
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
@@ -549,57 +571,52 @@
             }
 
             function addOrientationListener() {
-                window.addEventListener('deviceorientation', handleDeviceOrientation);
-                window.addEventListener('orientationchange', handleOrientationChange);
+                // Use deviceorientationabsolute for better compass data if available
+                if ('ondeviceorientationabsolute' in window) {
+                    window.addEventListener('deviceorientationabsolute', handleDeviceRotation);
+                    console.log('Using deviceorientationabsolute');
+                } else {
+                    window.addEventListener('deviceorientation', handleDeviceRotation);
+                    console.log('Using deviceorientation');
+                }
+                
                 deviceState.sensorActive = true;
-                console.log('Device orientation listener added');
+                
+                // Set baseline after a short delay to let sensors stabilize
+                setTimeout(() => {
+                    if (deviceState.lastAlpha !== null) {
+                        deviceState.baselineRotation = deviceState.currentRotation;
+                        console.log('Baseline rotation set to:', deviceState.baselineRotation);
+                    }
+                }, 1000);
             }
 
-            function handleDeviceOrientation(event) {
-                const { beta, gamma, alpha } = event;
+            function handleDeviceRotation(event) {
+                let { alpha, beta, gamma } = event;
                 
-                if (beta === null || gamma === null) {
-                    return; // No sensor data
+                // Use alpha (compass direction) for rotation
+                if (alpha !== null) {
+                    // Normalize alpha to 0-360
+                    alpha = alpha < 0 ? alpha + 360 : alpha;
+                    
+                    deviceState.currentRotation = alpha;
+                    deviceState.lastAlpha = alpha;
+                    
+                    // Calculate relative rotation from baseline
+                    let relativeRotation = alpha - deviceState.baselineRotation;
+                    
+                    // Normalize to -180 to 180, then to 0-360
+                    if (relativeRotation > 180) relativeRotation -= 360;
+                    if (relativeRotation < -180) relativeRotation += 360;
+                    if (relativeRotation < 0) relativeRotation += 360;
+                    
+                    deviceState.relativeRotation = relativeRotation;
+                    
+                    // Log occasionally for debugging
+                    if (Math.random() < 0.02) {
+                        console.log('Alpha:', Math.round(alpha), 'Baseline:', Math.round(deviceState.baselineRotation), 'Relative:', Math.round(relativeRotation));
+                    }
                 }
-
-                // Normalize sensor values to -1 to 1 range
-                const maxTilt = 45; // degrees
-                const normalizedGamma = Math.max(-1, Math.min(1, gamma / maxTilt));
-                const normalizedBeta = Math.max(-1, Math.min(1, beta / maxTilt));
-                
-                // Update device state based on current orientation
-                switch(deviceState.orientation) {
-                    case 0:   // Portrait
-                        deviceState.tiltX = normalizedGamma;
-                        deviceState.tiltY = normalizedBeta;
-                        break;
-                    case 90:  // Landscape left
-                        deviceState.tiltX = -normalizedBeta;
-                        deviceState.tiltY = normalizedGamma;
-                        break;
-                    case 180: // Portrait upside-down
-                        deviceState.tiltX = -normalizedGamma;
-                        deviceState.tiltY = -normalizedBeta;
-                        break;
-                    case 270: // Landscape right
-                        deviceState.tiltX = normalizedBeta;
-                        deviceState.tiltY = -normalizedGamma;
-                        break;
-                }
-            }
-
-            function handleOrientationChange() {
-                // Get current orientation
-                let orientation = 0;
-                if (screen.orientation && typeof screen.orientation.angle === 'number') {
-                    orientation = screen.orientation.angle;
-                } else if (typeof window.orientation === 'number') {
-                    orientation = window.orientation;
-                    if (orientation < 0) orientation += 360;
-                }
-                
-                deviceState.orientation = orientation;
-                console.log('Orientation changed to:', orientation);
             }
 
             function fallbackToKeyboard() {
@@ -607,16 +624,21 @@
                 deviceState.sensorActive = false;
             }
 
+            // Visual rotation indicator
+            function updateRotationIndicator() {
+                if (rotationArrow) {
+                    rotationArrow.style.transform = `rotate(${deviceState.relativeRotation}deg)`;
+                }
+            }
+
             // Debug display updates
             function updateDebugDisplay(gravity) {
-                if (tiltDisplay) {
-                    const tiltXDeg = Math.round(deviceState.tiltX * 45);
-                    const tiltYDeg = Math.round(deviceState.tiltY * 45);
-                    tiltDisplay.textContent = `${tiltXDeg}°, ${tiltYDeg}°`;
+                if (rotationDisplay) {
+                    rotationDisplay.textContent = `${Math.round(deviceState.currentRotation)}°`;
                 }
                 
-                if (orientationDisplay) {
-                    orientationDisplay.textContent = `${deviceState.orientation}°`;
+                if (relativeDisplay) {
+                    relativeDisplay.textContent = `${Math.round(deviceState.relativeRotation)}°`;
                 }
                 
                 if (gravityXDisplay) {
@@ -634,6 +656,10 @@
                 
                 if (sensorStatus) {
                     sensorStatus.textContent = deviceState.sensorActive ? '✅' : '⌨️';
+                }
+                
+                if (rawAlphaDisplay) {
+                    rawAlphaDisplay.textContent = deviceState.lastAlpha !== null ? `${Math.round(deviceState.lastAlpha)}°` : 'N/A';
                 }
             }
 
@@ -706,6 +732,14 @@
                 winModal.style.display = 'none';
                 setup();
                 Runner.run(runner, engine);
+                
+                // Reset rotation baseline
+                setTimeout(() => {
+                    if (deviceState.lastAlpha !== null) {
+                        deviceState.baselineRotation = deviceState.currentRotation;
+                        deviceState.relativeRotation = 0;
+                    }
+                }, 500);
             });
 
             permissionBtn.addEventListener('click', () => {
