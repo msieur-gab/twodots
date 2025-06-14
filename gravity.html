@@ -171,12 +171,12 @@
 <body>
     <canvas id="gameCanvas"></canvas>
     
-    <!-- <div class="controls-info">
+    <div class="controls-info">
         <div class="instruction">🎮 <strong>Rotation Physics</strong></div>
         <div class="instruction">📱 Rotate device to change gravity</div>
         <div class="instruction">🔒 Screen stays portrait</div>
         <div class="instruction">⌨️ Arrow keys for desktop</div>
-    </div> -->
+    </div>
     
     <div class="rotation-indicator">
         <div class="rotation-arrow" id="rotation-arrow"></div>
@@ -190,11 +190,11 @@
     <div class="debug-panel">
         <div style="text-align: center; color: #e74c3c; font-weight: bold; margin-bottom: 8px;">🧭 Rotation Debug</div>
         <div class="debug-row">
-            <span class="debug-label">Device Rotation:</span>
+            <span class="debug-label">Absolute Rotation:</span>
             <span class="debug-value" id="rotation-display">0°</span>
         </div>
         <div class="debug-row">
-            <span class="debug-label">Relative Angle:</span>
+            <span class="debug-label">Z-Axis Only:</span>
             <span class="debug-value" id="relative-display">0°</span>
         </div>
         <div class="debug-row">
@@ -266,9 +266,7 @@
             // Game state
             let ball, goal;
             let deviceState = {
-                currentRotation: 0,     // Current device rotation angle (0-360)
-                baselineRotation: 0,    // Initial rotation when game started
-                relativeRotation: 0,    // Rotation relative to baseline
+                absoluteRotation: 0,    // Absolute Z-axis rotation (0-360°)
                 sensorActive: false,
                 lastAlpha: null
             };
@@ -515,16 +513,17 @@
                 World.add(world, [ball, goal, ...mazeWalls, ...mazeContainment]);
             }
 
-            // ROTATION-BASED GRAVITY CALCULATION - FIXED
+            // ABSOLUTE Z-AXIS ROTATION GRAVITY CALCULATION
             function calculateGravityFromRotation() {
-                // Calculate gravity direction based on device rotation
-                // relativeRotation = 0° means device upright, gravity points down
-                // relativeRotation = 90° means device rotated right, gravity points right
-                const rotationRadians = deviceState.relativeRotation * (Math.PI / 180);
+                // Use absolute Z-axis rotation with fixed reference point
+                // 0° = North = gravity points down
+                // 90° = East = gravity points right  
+                // 180° = South = gravity points up
+                // 270° = West = gravity points left
+                const rotationRadians = deviceState.absoluteRotation * (Math.PI / 180);
                 const gravityMagnitude = 0.9;
                 
-                // Calculate gravity components - this makes gravity point toward real-world ground
-                // When device rotates right (clockwise), gravity should pull toward right side of screen
+                // Calculate gravity components for absolute reference
                 const gravityX = Math.sin(rotationRadians) * gravityMagnitude;
                 const gravityY = Math.cos(rotationRadians) * gravityMagnitude;
                 
@@ -535,21 +534,21 @@
             function handleControls() {
                 if (!ball) return;
 
-                // Handle keyboard controls for desktop testing (simulate rotation)
+                // Handle keyboard controls for desktop testing (simulate absolute rotation)
                 const keys = getCurrentKeys();
                 if (keys.ArrowLeft || keys.ArrowRight) {
-                    // Simulate rotation with arrow keys
+                    // Simulate absolute rotation with arrow keys
                     const rotationSpeed = 3; // degrees per frame
                     if (keys.ArrowLeft) {
-                        deviceState.relativeRotation -= rotationSpeed;
+                        deviceState.absoluteRotation -= rotationSpeed;
                     }
                     if (keys.ArrowRight) {
-                        deviceState.relativeRotation += rotationSpeed;
+                        deviceState.absoluteRotation += rotationSpeed;
                     }
                     
                     // Keep rotation in 0-360 range
-                    while (deviceState.relativeRotation < 0) deviceState.relativeRotation += 360;
-                    while (deviceState.relativeRotation >= 360) deviceState.relativeRotation -= 360;
+                    while (deviceState.absoluteRotation < 0) deviceState.absoluteRotation += 360;
+                    while (deviceState.absoluteRotation >= 360) deviceState.absoluteRotation -= 360;
                 }
 
                 // Calculate and apply gravity based on rotation
@@ -605,57 +604,31 @@
                 // Use deviceorientationabsolute for better compass data if available
                 if ('ondeviceorientationabsolute' in window) {
                     window.addEventListener('deviceorientationabsolute', handleDeviceRotation);
-                    console.log('Using deviceorientationabsolute');
+                    console.log('Using deviceorientationabsolute for absolute Z-axis rotation');
                 } else {
                     window.addEventListener('deviceorientation', handleDeviceRotation);
-                    console.log('Using deviceorientation');
+                    console.log('Using deviceorientation for absolute Z-axis rotation');
                 }
                 
                 deviceState.sensorActive = true;
-                
-                // Set baseline immediately when first sensor data arrives
-                let baselineSet = false;
-                const setBaseline = (event) => {
-                    if (!baselineSet && event.alpha !== null) {
-                        const alpha = event.alpha < 0 ? event.alpha + 360 : event.alpha;
-                        deviceState.baselineRotation = alpha;
-                        deviceState.currentRotation = alpha;
-                        deviceState.relativeRotation = 0;
-                        baselineSet = true;
-                        console.log('Baseline rotation set to:', deviceState.baselineRotation);
-                    }
-                };
-                
-                if ('ondeviceorientationabsolute' in window) {
-                    window.addEventListener('deviceorientationabsolute', setBaseline, { once: true });
-                } else {
-                    window.addEventListener('deviceorientation', setBaseline, { once: true });
-                }
+                console.log('Sensor active - using absolute compass heading');
             }
 
             function handleDeviceRotation(event) {
                 let { alpha, beta, gamma } = event;
                 
-                // Use alpha (compass direction) for rotation
+                // ONLY use alpha (Z-axis rotation), completely ignore beta/gamma (tilt)
                 if (alpha !== null) {
-                    // Normalize alpha to 0-360
+                    // Normalize alpha to 0-360 (absolute compass heading)
                     alpha = alpha < 0 ? alpha + 360 : alpha;
                     
-                    deviceState.currentRotation = alpha;
+                    // Use absolute rotation - no baseline, no relative calculation
+                    deviceState.absoluteRotation = alpha;
                     deviceState.lastAlpha = alpha;
-                    
-                    // Calculate relative rotation from baseline
-                    let relativeRotation = alpha - deviceState.baselineRotation;
-                    
-                    // Normalize to 0-360 range (always positive)
-                    while (relativeRotation < 0) relativeRotation += 360;
-                    while (relativeRotation >= 360) relativeRotation -= 360;
-                    
-                    deviceState.relativeRotation = relativeRotation;
                     
                     // Log occasionally for debugging
                     if (Math.random() < 0.02) {
-                        console.log('Alpha:', Math.round(alpha), 'Baseline:', Math.round(deviceState.baselineRotation), 'Relative:', Math.round(relativeRotation));
+                        console.log('Absolute Z-axis rotation:', Math.round(alpha), '°');
                     }
                 }
             }
@@ -668,9 +641,8 @@
             // Visual rotation indicator
             function updateRotationIndicator() {
                 if (rotationArrow) {
-                    // Arrow should point toward real-world ground
-                    // Add 180° to make sure arrow points down toward ground initially
-                    const arrowRotation = deviceState.relativeRotation;
+                    // Arrow shows absolute gravity direction based on Z-axis rotation
+                    const arrowRotation = deviceState.absoluteRotation;
                     rotationArrow.style.transform = `rotate(${arrowRotation}deg)`;
                 }
             }
@@ -678,11 +650,11 @@
             // Debug display updates
             function updateDebugDisplay(gravity) {
                 if (rotationDisplay) {
-                    rotationDisplay.textContent = `${Math.round(deviceState.currentRotation)}°`;
+                    rotationDisplay.textContent = `${Math.round(deviceState.absoluteRotation)}°`;
                 }
                 
                 if (relativeDisplay) {
-                    relativeDisplay.textContent = `${Math.round(deviceState.relativeRotation)}°`;
+                    relativeDisplay.textContent = `${Math.round(deviceState.absoluteRotation)}°`;
                 }
                 
                 if (gravityXDisplay) {
@@ -777,13 +749,8 @@
                 setup();
                 Runner.run(runner, engine);
                 
-                // Reset rotation baseline
-                setTimeout(() => {
-                    if (deviceState.lastAlpha !== null) {
-                        deviceState.baselineRotation = deviceState.currentRotation;
-                        deviceState.relativeRotation = 0;
-                    }
-                }, 500);
+                // Keep using absolute rotation - no reset needed
+                console.log('Game restarted - using absolute Z-axis rotation');
             });
 
             permissionBtn.addEventListener('click', () => {
