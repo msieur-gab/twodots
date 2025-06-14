@@ -124,11 +124,12 @@
     </div>
     
     <div class="sensor-debug" id="sensor-debug">
-        <div>📱 Real-World Gravity:</div>
+        <div>📱 Orientation Physics:</div>
         <div>Tilt: <span id="tilt-x">0.0, 0.0</span></div>
         <div>Gravity X: <span id="gravity-x">0.0</span></div>
         <div>Gravity Y: <span id="gravity-y">0.8</span></div>
-        <div style="color: #666; font-size: 10px;">Orient: <span id="tilt-angle">0°</span></div>
+        <div style="color: #666; font-size: 10px;">Rotation: <span id="tilt-angle">0°</span></div>
+        <div style="color: #666; font-size: 10px;">Method: <span id="orient-method">detecting...</span></div>
         <div style="color: #666; font-size: 10px;">Raw γ: <span id="raw-gamma">0</span>°</div>
     </div>
     
@@ -165,6 +166,7 @@
             const gravityXDisplay = document.getElementById('gravity-x');
             const gravityYDisplay = document.getElementById('gravity-y');
             const tiltAngleDisplay = document.getElementById('tilt-angle');
+            const orientMethodDisplay = document.getElementById('orient-method');
             const rawGammaDisplay = document.getElementById('raw-gamma');
 
             // SVG track data
@@ -450,6 +452,10 @@
                             if (state === 'granted') {
                                 console.log('Motion permission granted');
                                 window.addEventListener('deviceorientation', handleLegacyOrientation);
+                                // Also listen for orientation changes
+                                window.addEventListener('orientationchange', () => {
+                                    console.log('Orientation changed to:', window.orientation || screen.orientation?.angle || 'unknown');
+                                });
                             } else {
                                 console.log('Motion permission denied');
                             }
@@ -458,11 +464,17 @@
                             console.error('Motion permission error:', err);
                             // Try anyway for older devices
                             window.addEventListener('deviceorientation', handleLegacyOrientation);
+                            window.addEventListener('orientationchange', () => {
+                                console.log('Orientation changed to:', window.orientation || screen.orientation?.angle || 'unknown');
+                            });
                         });
                 } else {
                     // For older devices, just add the listener
                     console.log('Adding device orientation listener (no permission needed)');
                     window.addEventListener('deviceorientation', handleLegacyOrientation);
+                    window.addEventListener('orientationchange', () => {
+                        console.log('Orientation changed to:', window.orientation || screen.orientation?.angle || 'unknown');
+                    });
                 }
             }
 
@@ -474,22 +486,44 @@
                     rawGammaDisplay.textContent = Math.round(gamma || 0);
                 }
                 
-                // Log first few events for debugging
-                if (Math.random() < 0.1) { // Log occasionally to avoid spam
-                    console.log('Orientation event - gamma:', gamma, 'beta:', beta, 'screen angle:', screen.orientation?.angle || 'unknown');
+                // Get device orientation angle with multiple fallback methods
+                let orientationAngle = 0;
+                let detectionMethod = 'none';
+                
+                // Method 1: screen.orientation.angle (modern browsers)
+                if (screen.orientation && typeof screen.orientation.angle === 'number') {
+                    orientationAngle = screen.orientation.angle;
+                    detectionMethod = 'screen.orientation';
+                }
+                // Method 2: window.orientation (legacy support)
+                else if (typeof window.orientation === 'number') {
+                    orientationAngle = window.orientation;
+                    detectionMethod = 'window.orientation';
+                }
+                // Method 3: CSS media query detection
+                else {
+                    detectionMethod = 'css-media';
+                    if (window.matchMedia("(orientation: landscape)").matches) {
+                        // Use window dimensions to determine if left or right landscape
+                        orientationAngle = window.innerWidth > window.innerHeight ? 90 : 270;
+                    } else {
+                        orientationAngle = 0; // Portrait
+                    }
                 }
                 
-                // Get device orientation angle (0, 90, 180, 270)
-                let orientationAngle = 0;
-                if (screen.orientation && screen.orientation.angle !== undefined) {
-                    orientationAngle = screen.orientation.angle;
-                } else {
-                    // Fallback: try to detect from beta/gamma
-                    if (Math.abs(beta) > 45) {
-                        orientationAngle = beta > 0 ? 180 : 0;
-                    } else if (Math.abs(gamma) > 45) {
-                        orientationAngle = gamma > 0 ? 90 : 270;
-                    }
+                // Update detection method display
+                if (orientMethodDisplay) {
+                    orientMethodDisplay.textContent = detectionMethod;
+                }
+                
+                // Normalize orientation angle (some devices report -90 instead of 270)
+                if (orientationAngle < 0) {
+                    orientationAngle += 360;
+                }
+                
+                // Log for debugging
+                if (Math.random() < 0.05) { // Reduced frequency
+                    console.log('Orientation:', orientationAngle, 'method:', detectionMethod, 'gamma:', gamma, 'beta:', beta);
                 }
                 
                 // Process gamma and beta for gravity calculation
@@ -501,7 +535,6 @@
                     let normalizedBeta = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
                     
                     // Adjust for device orientation to maintain real-world gravity
-                    // This ensures gravity always points toward the physical floor
                     switch(orientationAngle) {
                         case 0:   // Portrait (normal)
                             tilt.x = normalizedGamma;   // Left/right tilt
