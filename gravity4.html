@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gravity Path Runner</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            font-family: 'Poppins', sans-serif;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        canvas {
+            background-color: transparent;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+        
+        .modal {
+            display: flex;
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            justify-content: center;
+            align-items: center;
+        }
+        
+        .modal-content {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            border: 2px solid #333;
+            max-width: 90vw;
+        }
+        
+        button {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 25px;
+            font-family: 'Poppins', sans-serif;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 15px;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
+        }
+        
+        .controls-info {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 14px;
+            z-index: 50;
+            border: 1px solid #333;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0,0,0,0.9);
+            padding: 15px;
+            border-radius: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 50;
+            border: 1px solid #333;
+            min-width: 220px;
+        }
+        
+        .debug-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        
+        .debug-label {
+            color: #888;
+        }
+        
+        .debug-value {
+            color: #fff;
+            font-weight: bold;
+        }
+        
+        .rotation-indicator {
+            position: fixed;
+            top: 50%;
+            left: 20px;
+            transform: translateY(-50%);
+            width: 80px;
+            height: 80px;
+            border: 3px solid #e74c3c;
+            border-radius: 50%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+        }
+        
+        .rotation-arrow {
+            width: 0;
+            height: 0;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-top: 25px solid #e74c3c;
+            transform-origin: center;
+            transition: transform 0.1s ease;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .goal-indicator {
+            position: fixed;
+            bottom: 200px;
+            right: 20px;
+            color: white;
+            background: rgba(46, 204, 113, 0.8);
+            padding: 10px 15px;
+            border-radius: 10px;
+            font-weight: 600;
+            z-index: 50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
+        }
+        
+        #win-modal {
+            display: none;
+        }
+        
+        .instruction {
+            margin: 5px 0;
+            padding: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div class="controls-info">
+        <div class="instruction">🎮 <strong>Rotation Physics</strong></div>
+        <div class="instruction">📱 Rotate device to change gravity</div>
+        <div class="instruction">⌨️ Arrow keys for desktop</div>
+    </div>
+    
+    <div class="rotation-indicator">
+        <div class="rotation-arrow" id="rotation-arrow"></div>
+        <div style="position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #888; white-space: nowrap;">gravity</div>
+    </div>
+    
+    <div class="goal-indicator">
+        🏁 Rotate to guide the ball!
+    </div>
+    
+    <div class="debug-panel">
+        <div style="text-align: center; color: #e74c3c; font-weight: bold; margin-bottom: 8px;">🧭 Rotation Debug</div>
+        <div class="debug-row">
+            <span class="debug-label">Z-Axis (alpha):</span>
+            <span class="debug-value" id="alpha-display">N/A</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Gravity X:</span>
+            <span class="debug-value" id="gravity-x-display">0.0</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Gravity Y:</span>
+            <span class="debug-value" id="gravity-y-display">1.0</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Ball Speed:</span>
+            <span class="debug-value" id="speed-display">0.0</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Sensor:</span>
+            <span class="debug-value" id="sensor-status">❌</span>
+        </div>
+    </div>
+    
+    <div id="permission-modal" class="modal">
+        <div class="modal-content">
+            <h2>🧭 Gravity Rotation Runner</h2>
+            <p>Control gravity by rotating your device!</p>
+            <div style="margin: 20px 0;">
+                <p><strong>🎯 Goal:</strong> Get the red ball to the green circle</p>
+                <p><strong>🔄 Controls:</strong> Physically rotate your device</p>
+            </div>
+            <button id="permission-btn">🚀 Start Game</button>
+        </div>
+    </div>
+
+    <div id="win-modal" class="modal">
+        <div class="modal-content">
+            <h2>🎉 Master of Rotation!</h2>
+            <p>You successfully mastered rotation control!</p>
+            <button id="play-again-btn">🎮 Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // Matter.js setup
+            const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+
+            // DOM elements
+            const canvas = document.getElementById('gameCanvas');
+            const winModal = document.getElementById('win-modal');
+            const playAgainBtn = document.getElementById('play-again-btn');
+            const permissionModal = document.getElementById('permission-modal');
+            const permissionBtn = document.getElementById('permission-btn');
+            const rotationArrow = document.getElementById('rotation-arrow');
+            
+            // Debug displays
+            const alphaDisplay = document.getElementById('alpha-display');
+            const gravityXDisplay = document.getElementById('gravity-x-display');
+            const gravityYDisplay = document.getElementById('gravity-y-display');
+            const speedDisplay = document.getElementById('speed-display');
+            const sensorStatus = document.getElementById('sensor-status');
+
+            // Game state
+            let ball, goal;
+            let sensorActive = false;
+            let zRotation = 0;
+            
+            let particles = [];
+            const engine = Engine.create();
+            const world = engine.world;
+
+            // Enhanced render setup
+            const render = Render.create({
+                canvas: canvas,
+                engine: engine,
+                options: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    wireframes: false,
+                    background: 'transparent',
+                    showDebug: false,
+                    showVelocity: false
+                }
+            });
+
+            const runner = Runner.create();
+
+            // SVG maze data remains the same
+            const svgData = `
+                <svg xmlns="http://www.w3.org/2000/svg">
+                    <rect x="9.05127" y="0.0375977" width="20" height="117.007" fill="#D9D9D9"/>
+                    <rect x="293.498" y="93.3536" width="20" height="117.007" fill="#D9D9D9"/>
+                    <rect x="9.05127" y="233.574" width="20" height="152.894" fill="#D9D9D9"/>
+                    <rect x="54.122" y="266.813" width="20" height="68.0735" fill="#D9D9D9"/>
+                    <rect x="248.726" y="132.984" width="20" height="53.5615" fill="#D9D9D9"/>
+                    <rect x="341.627" y="328.632" width="20" height="175.02" fill="#D9D9D9"/>
+                    <rect x="296.855" y="359.359" width="20" height="118.252" fill="#D9D9D9"/>
+                    <rect x="54.122" y="0.0375977" width="20" height="73.4388" fill="#D9D9D9"/>
+                    <rect x="115.816" y="113.106" width="20" height="73.4388" fill="#D9D9D9"/>
+                    <rect x="163.114" y="120.117" width="20" height="73.4388" fill="#D9D9D9"/>
+                    <rect x="183.114" y="176.545" width="20" height="67.2978" transform="rotate(90 183.114 176.545)" fill="#D9D9D9"/>
+                    <rect x="227.183" y="307.46" width="20" height="55.8381" transform="rotate(-180 227.183 307.46)" fill="#D9D9D9"/>
+                    <rect x="179.886" y="307.46" width="20" height="61.7314" transform="rotate(-180 179.886 307.46)" fill="#D9D9D9"/>
+                    <rect x="159.886" y="262.739" width="20" height="67.2978" transform="rotate(-90 159.886 262.739)" fill="#D9D9D9"/>
+                    <rect x="130.763" y="477.79" width="20" height="91.2411" transform="rotate(134.836 130.763 477.79)" fill="#D9D9D9"/>
+                    <rect x="98.0637" y="511.975" width="20" height="98.0499" transform="rotate(134.836 98.0637 511.975)" fill="#D9D9D9"/>
+                    <rect x="74.0663" y="655.362" width="20" height="65.1062" transform="rotate(179.836 74.0663 655.362)" fill="#D9D9D9"/>
+                    <rect x="26.9102" y="704.946" width="20" height="127.092" transform="rotate(179.836 26.9102 704.946)" fill="#D9D9D9"/>
+                    <rect x="26.4953" y="469.019" width="20" height="67.2978" transform="rotate(-135.164 26.4953 469.019)" fill="#D9D9D9"/>
+                    <rect width="20" height="71.4092" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 119.651 681.005)" fill="#D9D9D9"/>
+                    <rect width="20" height="76.7381" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 166.946 680.183)" fill="#D9D9D9"/>
+                    <rect width="20" height="282.847" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 336.295 636.655)" fill="#D9D9D9"/>
+                    <rect width="20" height="129.404" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 141.659 680.138)" fill="#D9D9D9"/>
+                    <rect width="20" height="136.587" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 308.231 680.112)" fill="#D9D9D9"/>
+                    <rect width="20" height="171.792" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 353.382 808.111)" fill="#D9D9D9"/>
+                    <rect width="20" height="98.1222" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 309.926 780.047)" fill="#D9D9D9"/>
+                    <rect width="20" height="48.83" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.5046 866.715)" fill="#D9D9D9"/>
+                    <rect width="20" height="70.5871" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.8661 965.666)" fill="#D9D9D9"/>
+                    <rect width="20" height="174.804" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 29.5146 966.294)" fill="#D9D9D9"/>
+                    <rect width="20" height="295.483" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 58.8906 833.75)" fill="#D9D9D9"/>
+                    <rect width="20" height="303.392" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 5.91693 792.405)" fill="#D9D9D9"/>
+                    <rect x="187.177" y="739.852" width="20" height="67.2978" transform="rotate(89.8361 187.177 739.852)" fill="#D9D9D9"/>
+                    <rect width="20" height="71.4092" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 54.3172 913.699)" fill="#D9D9D9"/>
+                    <rect width="20" height="76.7381" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 53.4949 866.404)" fill="#D9D9D9"/>
+                    <rect x="113.164" y="846.173" width="20" height="67.2978" transform="rotate(-0.163863 113.164 846.173)" fill="#D9D9D9"/>
+                    <rect x="56.9546" y="73.4764" width="20" height="252.801" transform="rotate(-80.9809 56.9546 73.4764)" fill="#D9D9D9"/>
+                    <rect x="11.9199" y="252.939" width="20" height="265.335" transform="rotate(-104.491 11.9199 252.939)" fill="#D9D9D9"/>
+                    <rect x="59.1265" y="286.177" width="20" height="269.804" transform="rotate(-104.491 59.1265 286.177)" fill="#D9D9D9"/>
+                    <rect x="59.1265" y="338.497" width="20" height="124.591" transform="rotate(-104.491 59.1265 338.497)" fill="#D9D9D9"/>
+                    <rect x="19.8591" y="395.575" width="20" height="190.146" transform="rotate(-104.491 19.8591 395.575)" fill="#D9D9D9"/>
+                    <rect x="232.148" y="525.266" width="20" height="99.6203" transform="rotate(-119.187 232.148 525.266)" fill="#D9D9D9"/>
+                    <rect x="222.411" y="582.749" width="20" height="164.696" transform="rotate(-119.187 222.411 582.749)" fill="#D9D9D9"/>
+                    <rect x="125.57" y="483.193" width="20" height="65.8419" transform="rotate(-135.139 125.57 483.193)" fill="#D9D9D9"/>
+                    <rect x="14.412" y="594.89" width="20" height="98.8057" transform="rotate(-135.139 14.412 594.89)" fill="#D9D9D9"/>
+                    <rect x="68.275" y="605.178" width="20" height="146.606" transform="rotate(-135.139 68.275 605.178)" fill="#D9D9D9"/>
+                    <rect x="145.505" y="438.124" width="20" height="124.647" transform="rotate(-45.4509 145.505 438.124)" fill="#D9D9D9"/>
+                    <rect x="144.662" y="501.052" width="20" height="109.481" transform="rotate(-45.4509 144.662 501.052)" fill="#D9D9D9"/>
+                    <rect x="206.149" y="307.335" width="20" height="155.362" transform="rotate(-75.6689 206.149 307.335)" fill="#D9D9D9"/>
+                    <rect x="193.535" y="348.01" width="20" height="124.136" transform="rotate(-75.6689 193.535 348.01)" fill="#D9D9D9"/>
+                    <rect x="163.114" y="136.471" width="20" height="103.76" transform="rotate(-80.9809 163.114 136.471)" fill="#D9D9D9"/>
+                    <rect x="15.916" y="113.106" width="20" height="118.227" transform="rotate(-80.9809 15.916 113.106)" fill="#D9D9D9"/>
+                </svg>
+            `;
+
+            // Create maze walls from SVG
+            function createWallsFromSVG(svgString, scale, offsetX, offsetY) {
+                const wallOptions = {
+                    isStatic: true,
+                    render: { 
+                        fillStyle: '#4a5568',
+                        strokeStyle: '#2d3748',
+                        lineWidth: 1
+                    },
+                    friction: 0.8,
+                    restitution: 0.1
+                };
+
+                const tempDiv = document.createElement('div');
+                tempDiv.style.visibility = 'hidden';
+                tempDiv.style.position = 'absolute';
+                tempDiv.innerHTML = svgString;
+                document.body.appendChild(tempDiv);
+                
+                const svgElement = tempDiv.querySelector('svg');
+                const rects = svgElement.querySelectorAll('rect');
+                const walls = [];
+
+                rects.forEach(rect => {
+                    const w = parseFloat(rect.getAttribute('width'));
+                    const h = parseFloat(rect.getAttribute('height'));
+                    const matrix = rect.getCTM();
+                    const bbox = rect.getBBox();
+                    const localCenterX = bbox.x + w / 2;
+                    const localCenterY = bbox.y + h / 2;
+                    const finalCenterX = matrix.a * localCenterX + matrix.c * localCenterY + matrix.e;
+                    const finalCenterY = matrix.b * localCenterX + matrix.d * localCenterY + matrix.f;
+                    const angle = Math.atan2(matrix.b, matrix.a);
+                    const worldX = (finalCenterX * scale) + offsetX;
+                    const worldY = (finalCenterY * scale) + offsetY;
+
+                    walls.push(
+                        Bodies.rectangle(worldX, worldY, w * scale, h * scale, {
+                            ...wallOptions,
+                            angle: angle
+                        })
+                    );
+                });
+                
+                document.body.removeChild(tempDiv);
+                return walls;
+            }
+
+            // Game setup
+            function setup() {
+                const width = window.innerWidth;
+                const height = window.innerHeight;
+
+                render.options.width = width;
+                render.options.height = height;
+                render.canvas.width = width;
+                render.canvas.height = height;
+
+                World.clear(world);
+                particles = [];
+
+                // Calculate responsive scaling
+                const svgBounds = { width: 367, height: 967 };
+                const scaleX = width / svgBounds.width;
+                const scaleY = height / svgBounds.height;
+                const scale = Math.min(scaleX, scaleY) * 0.85;
+                const offsetX = (width - svgBounds.width * scale) / 2;
+                const offsetY = (height - svgBounds.height * scale) / 2;
+                
+                // Create ball with improved physics
+                const startPos = { x: 20, y: 50 };
+                const ballRadius = 10 * scale;
+                const ballX = (startPos.x * scale) + offsetX;
+                const ballY = (startPos.y * scale) + offsetY;
+                
+                ball = Bodies.circle(ballX, ballY, ballRadius, {
+                    restitution: 0.4,
+                    friction: 0.6,
+                    frictionAir: 0.01,
+                    density: 0.8,
+                    render: {
+                        fillStyle: '#e74c3c',
+                        strokeStyle: '#c0392b',
+                        lineWidth: 3
+                    }
+                });
+
+                // Create goal
+                const goalPos = { x: 20, y: 920 };
+                const goalRadius = 18 * scale;
+                const goalX = (goalPos.x * scale) + offsetX;
+                const goalY = (goalPos.y * scale) + offsetY;
+                
+                goal = Bodies.circle(goalX, goalY, goalRadius, {
+                    isStatic: true,
+                    isSensor: true,
+                    render: {
+                        fillStyle: '#2ecc71',
+                        strokeStyle: '#27ae60',
+                        lineWidth: 4
+                    }
+                });
+
+                // Create maze walls
+                const mazeWalls = createWallsFromSVG(svgData, scale, offsetX, offsetY);
+                
+                const boundaryThickness = 50;
+                const boundaries = [
+                    Bodies.rectangle(width/2, -boundaryThickness/2, width, boundaryThickness, { isStatic: true, render: { visible: false } }),
+                    Bodies.rectangle(width/2, height + boundaryThickness/2, width, boundaryThickness, { isStatic: true, render: { visible: false } }),
+                    Bodies.rectangle(-boundaryThickness/2, height/2, boundaryThickness, height, { isStatic: true, render: { visible: false } }),
+                    Bodies.rectangle(width + boundaryThickness/2, height/2, boundaryThickness, height, { isStatic: true, render: { visible: false } })
+                ];
+
+                World.add(world, [ball, goal, ...mazeWalls, ...boundaries]);
+            }
+
+            // Keyboard state tracking for fallback
+            const keyState = {};
+            document.addEventListener('keydown', (e) => {
+                keyState[e.key] = true;
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    const rotationSpeed = 3;
+                    if (keyState['ArrowLeft']) zRotation -= rotationSpeed;
+                    if (keyState['ArrowRight']) zRotation += rotationSpeed;
+                    
+                    while (zRotation < 0) zRotation += 360;
+                    while (zRotation >= 360) zRotation -= 360;
+                }
+            });
+            document.addEventListener('keyup', (e) => keyState[e.key] = false);
+
+            function handleControls() {
+                 if (!ball) return;
+                
+                const rotationRadians = zRotation * (Math.PI / 180);
+                const gravityMagnitude = 1;
+                
+                // 0° = down, 90° = right, 180° = up, 270° = left
+                engine.world.gravity.x = Math.sin(rotationRadians) * gravityMagnitude;
+                engine.world.gravity.y = Math.cos(rotationRadians) * gravityMagnitude;
+
+                updateRotationIndicator();
+                updateDebugDisplay();
+            }
+
+            // Device orientation handling - uses Z-AXIS ROTATION (alpha)
+            function enableSensorControls() {
+                console.log('Requesting device orientation permission...');
+                
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response === 'granted') {
+                                console.log('Device orientation permission granted.');
+                                addOrientationListener();
+                            } else {
+                                console.log('Permission denied. Falling back to keyboard.');
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error requesting permission:', error);
+                            addOrientationListener(); // Try anyway
+                        });
+                } else {
+                    console.log('No permission needed. Adding listener.');
+                    addOrientationListener();
+                }
+            }
+            
+            function addOrientationListener() {
+                if ('ondeviceorientationabsolute' in window) {
+                    window.addEventListener('deviceorientationabsolute', handleDeviceRotation);
+                } else {
+                    window.addEventListener('deviceorientation', handleDeviceRotation);
+                }
+                sensorActive = true;
+            }
+
+            function handleDeviceRotation(event) {
+                if (event.alpha !== null) {
+                    zRotation = event.alpha;
+                }
+            }
+            
+            function updateRotationIndicator() {
+                if(rotationArrow) {
+                    rotationArrow.style.transform = `rotate(${zRotation}deg)`;
+                }
+            }
+
+            function updateDebugDisplay() {
+                if (alphaDisplay) {
+                    alphaDisplay.textContent = sensorActive ? `${Math.round(zRotation)}°` : 'N/A';
+                }
+                if (gravityXDisplay) {
+                    gravityXDisplay.textContent = engine.world.gravity.x.toFixed(2);
+                }
+                if (gravityYDisplay) {
+                    gravityYDisplay.textContent = engine.world.gravity.y.toFixed(2);
+                }
+                if (speedDisplay && ball) {
+                    const speed = Math.sqrt(ball.velocity.x ** 2 + ball.velocity.y ** 2);
+                    speedDisplay.textContent = speed.toFixed(1);
+                }
+                if (sensorStatus) {
+                    sensorStatus.textContent = sensorActive ? '✅' : '⌨️';
+                }
+            }
+
+
+            // Particle effects for ball trail
+            function createParticle(x, y) {
+                return {
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5,
+                    life: 1.0, decay: 0.04,
+                    size: 1 + Math.random() * 2,
+                    color: `hsl(${Math.random() * 60 + 300}, 80%, 70%)`
+                };
+            }
+
+            // Game loop events
+            Events.on(engine, 'beforeUpdate', handleControls);
+            
+            Events.on(engine, 'afterUpdate', () => {
+                if (ball && Math.random() < 0.5) {
+                    particles.push(createParticle(ball.position.x, ball.position.y));
+                }
+                
+                // Update particles
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    const p = particles[i];
+                    p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+                    if (p.life <= 0) particles.splice(i, 1);
+                }
+            });
+
+            // Win condition
+            Events.on(engine, 'collisionStart', (event) => {
+                for (const pair of event.pairs) {
+                    if ((pair.bodyA === ball && pair.bodyB === goal) || 
+                        (pair.bodyA === goal && pair.bodyB === ball)) {
+                        winModal.style.display = 'flex';
+                        Runner.stop(runner);
+                    }
+                }
+            });
+
+            // Render particle effects
+            Events.on(render, 'afterRender', () => {
+                const ctx = render.canvas.getContext('2d');
+                particles.forEach(p => {
+                    ctx.save();
+                    ctx.globalAlpha = p.life * 0.8;
+                    ctx.fillStyle = p.color;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.restore();
+                });
+            });
+
+            // UI event listeners
+            playAgainBtn.addEventListener('click', () => {
+                winModal.style.display = 'none';
+                setup(); // Reset the level
+                Runner.run(runner, engine);
+            });
+
+            permissionBtn.addEventListener('click', () => {
+                enableSensorControls();
+                permissionModal.style.display = 'none';
+            });
+
+            window.addEventListener('resize', setup);
+
+            // Initialize
+            setup();
+            Render.run(render);
+            Runner.run(runner, engine);
+        });
+    </script>
+</body>
+</html>
