@@ -391,10 +391,10 @@
                     }
                 }
 
-                // Mobile tilt controls (INVERTED for natural feel)
+                // Mobile tilt controls (NO MORE DOUBLE INVERSION!)
                 if (Math.abs(tilt.x) > 0.1 || Math.abs(tilt.y) > 0.1) {
-                    gravityX = tilt.x;  // Keep X as is (left/right tilt)
-                    gravityY = -tilt.y; // INVERT Y (forward tilt should make ball go down)
+                    gravityX = tilt.x;  // Left/right stays the same
+                    gravityY = tilt.y;  // Up/down already flipped in sensor reading
                 }
 
                 // Apply gravity
@@ -412,6 +412,7 @@
 
             // Mobile sensor controls
             function enableSensorControls() {
+                // Try to lock screen orientation
                 if (screen.orientation && typeof screen.orientation.lock === 'function') {
                     try {
                         screen.orientation.lock('portrait-primary').catch(err => 
@@ -422,61 +423,71 @@
                     }
                 }
 
-                if ('AbsoluteOrientationSensor' in window) {
-                    try {
-                        const sensor = new AbsoluteOrientationSensor({ frequency: 60 });
-                        sensor.addEventListener('reading', () => {
-                            if (!ball) return;
-                            const q = sensor.quaternion;
-                            const roll = Math.atan2(2 * (q[0] * q[1] + q[3] * q[2]), 1 - 2 * (q[1] * q[1] + q[2] * q[2]));
-                            const pitch = Math.asin(2 * (q[0] * q[2] - q[3] * q[1]));
-                            const maxTilt = Math.PI / 4;
-                            tilt.x = Math.max(-1, Math.min(1, roll / maxTilt));
-                            tilt.y = Math.max(-1, Math.min(1, pitch / maxTilt));
-                        });
-                        sensor.start();
-                    } catch (error) {
-                        console.log('Sensor API failed, falling back.', error);
-                        addLegacyMotionListener();
-                    }
-                } else {
-                    addLegacyMotionListener();
-                }
+                // Always try legacy motion listener first (more reliable)
+                addLegacyMotionListener();
             }
 
             function addLegacyMotionListener() {
+                // For iOS 13+ devices, request permission
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission().then(state => {
-                        if (state === 'granted') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(state => {
+                            if (state === 'granted') {
+                                console.log('Motion permission granted');
+                                window.addEventListener('deviceorientation', handleLegacyOrientation);
+                            } else {
+                                console.log('Motion permission denied');
+                            }
+                        })
+                        .catch(err => {
+                            console.error('Motion permission error:', err);
+                            // Try anyway for older devices
                             window.addEventListener('deviceorientation', handleLegacyOrientation);
-                        }
-                    }).catch(console.error);
+                        });
                 } else {
+                    // For older devices, just add the listener
+                    console.log('Adding device orientation listener (no permission needed)');
                     window.addEventListener('deviceorientation', handleLegacyOrientation);
                 }
             }
 
             function handleLegacyOrientation(event) {
                 const { beta, gamma } = event;
-                const maxTilt = 45;
                 
-                // gamma: left/right tilt (-90 to 90)
-                // beta: forward/back tilt (-180 to 180)
-                // Normalize to -1 to 1 range
-                tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
-                tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
-                
-                // Update raw sensor display
+                // Update raw sensor display first
                 if (rawBetaDisplay) {
                     rawBetaDisplay.textContent = Math.round(beta || 0);
                     rawGammaDisplay.textContent = Math.round(gamma || 0);
                 }
                 
-                // Expected behavior:
-                // - Tilt left (gamma < 0): ball should roll left (tilt.x < 0)
-                // - Tilt right (gamma > 0): ball should roll right (tilt.x > 0)  
-                // - Tilt forward (beta > 0): ball should roll down (gravity.y > 0)
-                // - Tilt back (beta < 0): ball should roll up (gravity.y < 0)
+                // Log first few events for debugging
+                if (Math.random() < 0.1) { // Log occasionally to avoid spam
+                    console.log('Orientation event:', { beta, gamma });
+                }
+                
+                // Only process if we have valid sensor data
+                if (beta !== null && gamma !== null && (Math.abs(beta) > 0.1 || Math.abs(gamma) > 0.1)) {
+                    const maxTilt = 45;
+                    
+                    // gamma: left/right tilt (-90 to 90)
+                    // beta: forward/back tilt (-180 to 180, but we care about -90 to 90)
+                    
+                    // Normalize and FLIP the directions for natural feel:
+                    tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));      // Keep X as is
+                    tilt.y = Math.max(-1, Math.min(1, -(beta || 0) / maxTilt));     // FLIP Y
+                    
+                    // Expected behavior after fix:
+                    // - Tilt left (gamma < 0): ball rolls left (tilt.x < 0) ✓
+                    // - Tilt right (gamma > 0): ball rolls right (tilt.x > 0) ✓  
+                    // - Tilt forward (beta > 0): ball rolls down (tilt.y < 0 after flip, gravity.y > 0 after double flip) ✓
+                    // - Tilt back (beta < 0): ball rolls up (tilt.y > 0 after flip, gravity.y < 0 after double flip) ✓
+                } else {
+                    // If no meaningful sensor data, reset to neutral
+                    if (!keys.ArrowUp && !keys.ArrowDown && !keys.ArrowLeft && !keys.ArrowRight) {
+                        tilt.x = 0;
+                        tilt.y = 0;
+                    }
+                }
             }
 
             // Particle effects
@@ -549,6 +560,7 @@
             });
 
             permissionBtn.addEventListener('click', () => {
+                console.log('Permission button clicked, enabling sensors...');
                 enableSensorControls();
                 permissionModal.style.display = 'none';
             });
