@@ -134,7 +134,7 @@
             height: 0;
             border-left: 12px solid transparent;
             border-right: 12px solid transparent;
-            border-bottom: 25px solid #e74c3c;
+            border-top: 25px solid #e74c3c;
             transform-origin: center;
             transition: transform 0.1s ease;
             filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
@@ -464,28 +464,54 @@
                 // Create maze walls
                 const mazeWalls = createWallsFromSVG(svgData, scale, offsetX, offsetY);
                 
-                // Create boundaries
-                const boundaryThickness = 20;
-                const boundaries = [
+                // Create proper maze containment - extend maze walls to viewport edges
+                const boundaryThickness = 50;
+                const mazeContainment = [
+                    // Top boundary - extends across entire viewport
                     Bodies.rectangle(width/2, -boundaryThickness/2, width, boundaryThickness, { 
                         isStatic: true, 
                         render: { fillStyle: '#2d3748' } 
                     }),
+                    // Bottom boundary - extends across entire viewport  
                     Bodies.rectangle(width/2, height + boundaryThickness/2, width, boundaryThickness, { 
                         isStatic: true, 
                         render: { fillStyle: '#2d3748' } 
                     }),
+                    // Left boundary - extends full height
                     Bodies.rectangle(-boundaryThickness/2, height/2, boundaryThickness, height, { 
                         isStatic: true, 
                         render: { fillStyle: '#2d3748' } 
                     }),
+                    // Right boundary - extends full height
                     Bodies.rectangle(width + boundaryThickness/2, height/2, boundaryThickness, height, { 
                         isStatic: true, 
                         render: { fillStyle: '#2d3748' } 
+                    }),
+                    
+                    // Additional maze containment walls to seal gaps
+                    // Left edge of maze area
+                    Bodies.rectangle(offsetX - 10, height/2, 20, height, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#4a5568' } 
+                    }),
+                    // Right edge of maze area  
+                    Bodies.rectangle(offsetX + (svgBounds.width * scale) + 10, height/2, 20, height, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#4a5568' } 
+                    }),
+                    // Top edge of maze area
+                    Bodies.rectangle(width/2, offsetY - 10, width, 20, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#4a5568' } 
+                    }),
+                    // Bottom edge of maze area
+                    Bodies.rectangle(width/2, offsetY + (svgBounds.height * scale) + 10, width, 20, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#4a5568' } 
                     })
                 ];
 
-                World.add(world, [ball, goal, ...mazeWalls, ...boundaries]);
+                World.add(world, [ball, goal, ...mazeWalls, ...mazeContainment]);
             }
 
             // ROTATION-BASED GRAVITY CALCULATION
@@ -629,7 +655,10 @@
             // Visual rotation indicator
             function updateRotationIndicator() {
                 if (rotationArrow) {
-                    rotationArrow.style.transform = `rotate(${deviceState.relativeRotation}deg)`;
+                    // Arrow should point toward real-world ground
+                    // Add 180° to make sure arrow points down toward ground initially
+                    const arrowRotation = deviceState.relativeRotation;
+                    rotationArrow.style.transform = `rotate(${arrowRotation}deg)`;
                 }
             }
 
