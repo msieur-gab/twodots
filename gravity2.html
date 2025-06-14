@@ -224,6 +224,8 @@
             // Game state
             let ball, goal;
             let sensorActive = false;
+            // **FIX**: State object to hold latest tilt data
+            let tiltData = { beta: null, gamma: null };
             
             let particles = [];
             const engine = Engine.create();
@@ -475,6 +477,10 @@
                         sensorActive = true;
                     }
 
+                    // **FIX**: Store latest sensor data
+                    tiltData.beta = beta;
+                    tiltData.gamma = gamma;
+
                     // Normalize gamma and beta to a gravity vector from -1 to 1
                     // Clamp values to the -90 to 90 range to prevent erratic behavior
                     const clampedGamma = Math.max(-90, Math.min(90, gamma));
@@ -487,12 +493,12 @@
             }
             
             function updateDebugDisplay() {
-                // Update with live values from the engine and sensor
+                // **FIX**: Read from the stored tiltData object
                 if (betaDisplay) {
-                    betaDisplay.textContent = sensorActive && event.beta ? `${Math.round(event.beta)}°` : 'N/A';
+                    betaDisplay.textContent = sensorActive && tiltData.beta !== null ? `${Math.round(tiltData.beta)}°` : 'N/A';
                 }
                 if (gammaDisplay) {
-                    gammaDisplay.textContent = sensorActive && event.gamma ? `${Math.round(event.gamma)}°` : 'N/A';
+                    gammaDisplay.textContent = sensorActive && tiltData.gamma !== null ? `${Math.round(tiltData.gamma)}°` : 'N/A';
                 }
                 if (gravityXDisplay) {
                     gravityXDisplay.textContent = engine.world.gravity.x.toFixed(2);

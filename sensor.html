@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Device Sensor Test</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 20px;
+            background: #0f0f23;
+            color: white;
+            font-family: monospace;
+            font-size: 18px;
+            line-height: 1.5;
+        }
+        
+        .sensor-panel {
+            background: #1a1a2e;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 2px solid #333;
+        }
+        
+        .sensor-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 15px 0;
+            padding: 10px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 8px;
+        }
+        
+        .sensor-label {
+            color: #888;
+            font-weight: bold;
+        }
+        
+        .sensor-value {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 20px;
+        }
+        
+        button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        
+        .status {
+            text-align: center;
+            padding: 20px;
+            font-size: 24px;
+            color: #2ecc71;
+        }
+        
+        .instructions {
+            background: #16213e;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>📱 Device Sensor Test</h1>
+    
+    <div class="instructions">
+        <h3>🧪 Test Instructions:</h3>
+        <p>1. Click "Start Sensor Test" to enable device sensors</p>
+        <p>2. Hold device upright (portrait mode)</p>
+        <p>3. Slowly rotate device and watch values change</p>
+        <p>4. Values are rounded to nearest 10° for clarity</p>
+    </div>
+    
+    <div class="status" id="status">Click button to start sensor test</div>
+    
+    <button id="start-btn">🚀 Start Sensor Test</button>
+    <button id="reset-btn">🔄 Reset Values</button>
+    
+    <div class="sensor-panel">
+        <h3>📊 Raw Sensor Data (Rounded to 10°)</h3>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">X-Axis Rotation (Beta):</span>
+            <span class="sensor-value" id="x-rotation">0°</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Y-Axis Rotation (Gamma):</span>
+            <span class="sensor-value" id="y-rotation">0°</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Z-Axis Rotation (Alpha):</span>
+            <span class="sensor-value" id="z-rotation">0°</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Screen Orientation:</span>
+            <span class="sensor-value" id="screen-orientation">0°</span>
+        </div>
+    </div>
+    
+    <div class="sensor-panel">
+        <h3>🔍 Sensor Details</h3>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Raw Alpha (Z):</span>
+            <span class="sensor-value" id="raw-alpha">null</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Raw Beta (X):</span>
+            <span class="sensor-value" id="raw-beta">null</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Raw Gamma (Y):</span>
+            <span class="sensor-value" id="raw-gamma">null</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Sensor Type:</span>
+            <span class="sensor-value" id="sensor-type">None</span>
+        </div>
+        
+        <div class="sensor-row">
+            <span class="sensor-label">Update Count:</span>
+            <span class="sensor-value" id="update-count">0</span>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // DOM elements
+            const startBtn = document.getElementById('start-btn');
+            const resetBtn = document.getElementById('reset-btn');
+            const status = document.getElementById('status');
+            
+            // Rotation displays
+            const xRotationDisplay = document.getElementById('x-rotation');
+            const yRotationDisplay = document.getElementById('y-rotation');
+            const zRotationDisplay = document.getElementById('z-rotation');
+            const screenOrientationDisplay = document.getElementById('screen-orientation');
+            
+            // Raw sensor displays
+            const rawAlphaDisplay = document.getElementById('raw-alpha');
+            const rawBetaDisplay = document.getElementById('raw-beta');
+            const rawGammaDisplay = document.getElementById('raw-gamma');
+            const sensorTypeDisplay = document.getElementById('sensor-type');
+            const updateCountDisplay = document.getElementById('update-count');
+            
+            // State
+            let sensorActive = false;
+            let updateCount = 0;
+            
+            // Utility function to round to nearest 10
+            function roundTo10(value) {
+                if (value === null || value === undefined) return 0;
+                return Math.round(value / 10) * 10;
+            }
+            
+            // Get screen orientation
+            function getScreenOrientation() {
+                if (screen.orientation && typeof screen.orientation.angle === 'number') {
+                    return screen.orientation.angle;
+                } else if (typeof window.orientation === 'number') {
+                    return window.orientation < 0 ? window.orientation + 360 : window.orientation;
+                } else {
+                    return 0;
+                }
+            }
+            
+            // Handle device orientation data
+            function handleDeviceOrientation(event) {
+                const { alpha, beta, gamma } = event;
+                updateCount++;
+                
+                // Update raw values
+                rawAlphaDisplay.textContent = alpha !== null ? alpha.toFixed(1) + '°' : 'null';
+                rawBetaDisplay.textContent = beta !== null ? beta.toFixed(1) + '°' : 'null';
+                rawGammaDisplay.textContent = gamma !== null ? gamma.toFixed(1) + '°' : 'null';
+                
+                // Update rounded rotation values
+                xRotationDisplay.textContent = roundTo10(beta) + '°';
+                yRotationDisplay.textContent = roundTo10(gamma) + '°';
+                zRotationDisplay.textContent = roundTo10(alpha) + '°';
+                
+                // Update screen orientation
+                screenOrientationDisplay.textContent = getScreenOrientation() + '°';
+                
+                // Update counter
+                updateCountDisplay.textContent = updateCount;
+                
+                // Update status
+                status.textContent = '✅ Sensors Active - Rotate your device to see changes';
+            }
+            
+            // Start sensor monitoring
+            function startSensors() {
+                console.log('Starting sensor test...');
+                
+                // Request permission on iOS 13+
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    DeviceOrientationEvent.requestPermission()
+                        .then(response => {
+                            if (response === 'granted') {
+                                console.log('Permission granted');
+                                addSensorListeners();
+                            } else {
+                                console.log('Permission denied');
+                                status.textContent = '❌ Permission denied for device sensors';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Permission error:', error);
+                            addSensorListeners(); // Try anyway
+                        });
+                } else {
+                    // No permission needed
+                    addSensorListeners();
+                }
+            }
+            
+            function addSensorListeners() {
+                // Try deviceorientationabsolute first (better for compass)
+                if ('ondeviceorientationabsolute' in window) {
+                    window.addEventListener('deviceorientationabsolute', handleDeviceOrientation);
+                    sensorTypeDisplay.textContent = 'deviceorientationabsolute';
+                    console.log('Using deviceorientationabsolute');
+                } else {
+                    window.addEventListener('deviceorientation', handleDeviceOrientation);
+                    sensorTypeDisplay.textContent = 'deviceorientation';
+                    console.log('Using deviceorientation');
+                }
+                
+                // Listen for orientation changes
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => {
+                        screenOrientationDisplay.textContent = getScreenOrientation() + '°';
+                    }, 100);
+                });
+                
+                sensorActive = true;
+                status.textContent = '🔄 Initializing sensors... Please wait';
+                
+                // Update status after sensors have time to initialize
+                setTimeout(() => {
+                    if (updateCount === 0) {
+                        status.textContent = '⚠️ No sensor data received - device may not support motion sensors';
+                    } else {
+                        status.textContent = '✅ Sensors Active - Rotate your device to see changes';
+                    }
+                }, 2000);
+            }
+            
+            // Reset all values
+            function resetValues() {
+                updateCount = 0;
+                xRotationDisplay.textContent = '0°';
+                yRotationDisplay.textContent = '0°';
+                zRotationDisplay.textContent = '0°';
+                screenOrientationDisplay.textContent = getScreenOrientation() + '°';
+                rawAlphaDisplay.textContent = 'null';
+                rawBetaDisplay.textContent = 'null';
+                rawGammaDisplay.textContent = 'null';
+                updateCountDisplay.textContent = '0';
+                status.textContent = updateCount > 0 ? '✅ Values reset - sensors still active' : 'Click button to start sensor test';
+            }
+            
+            // Event listeners
+            startBtn.addEventListener('click', startSensors);
+            resetBtn.addEventListener('click', resetValues);
+            
+            // Initialize screen orientation display
+            screenOrientationDisplay.textContent = getScreenOrientation() + '°';
+        });
+    </script>
+</body>
+</html>
