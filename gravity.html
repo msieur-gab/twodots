@@ -171,12 +171,12 @@
 <body>
     <canvas id="gameCanvas"></canvas>
     
-    <!-- <div class="controls-info">
+    <div class="controls-info">
         <div class="instruction">🎮 <strong>Rotation Physics</strong></div>
         <div class="instruction">📱 Rotate device to change gravity</div>
         <div class="instruction">🔒 Screen stays portrait</div>
         <div class="instruction">⌨️ Arrow keys for desktop</div>
-    </div> -->
+    </div>
     
     <div class="rotation-indicator">
         <div class="rotation-arrow" id="rotation-arrow"></div>
@@ -512,14 +512,14 @@
                 World.add(world, [ball, goal, ...mazeWalls, ...mazeContainment]);
             }
 
-            // SIMPLE Z-AXIS GRAVITY - Arrow always points toward real-world down
+            // FIXED Z-AXIS GRAVITY - Ball follows arrow direction
             function calculateGravityFromRotation() {
-                // Convert Z-axis rotation to gravity direction
-                // INVERT rotation for correct gravity direction
-                const rotationRadians = (-deviceState.zRotation) * (Math.PI / 180);
+                // Arrow points toward real-world ground, ball follows arrow
+                const rotationRadians = deviceState.zRotation * (Math.PI / 180);
                 const gravityMagnitude = 0.9;
                 
-                // Inverted rotation: clockwise device rotation = gravity pulls toward that side
+                // Correct coordinate system: ball follows arrow direction
+                // 0° = down, 90° = right, 180° = up, 270° = left
                 const gravityX = Math.sin(rotationRadians) * gravityMagnitude;
                 const gravityY = Math.cos(rotationRadians) * gravityMagnitude;
                 
