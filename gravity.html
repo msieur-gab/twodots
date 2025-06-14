@@ -11,7 +11,7 @@
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background: #000000;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
             font-family: 'Poppins', sans-serif;
             height: 100vh;
             width: 100vw;
@@ -23,7 +23,7 @@
         canvas {
             background-color: transparent;
             border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
         }
         
         .modal {
@@ -34,23 +34,24 @@
             top: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0,0,0,0.8);
+            background-color: rgba(0,0,0,0.9);
             justify-content: center;
             align-items: center;
         }
         
         .modal-content {
-            background: #1a1a1a;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: white;
             padding: 30px;
             border-radius: 15px;
             text-align: center;
             box-shadow: 0 10px 30px rgba(0,0,0,0.8);
             border: 2px solid #333;
+            max-width: 90vw;
         }
         
         button {
-            background: #e74c3c;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
             color: white;
             border: none;
             padding: 12px 24px;
@@ -59,11 +60,13 @@
             font-weight: 600;
             cursor: pointer;
             margin-top: 15px;
-            transition: transform 0.2s;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
         }
         
         button:hover {
-            transform: scale(1.05);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
         }
         
         .controls-info {
@@ -71,30 +74,47 @@
             top: 20px;
             left: 20px;
             color: white;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0,0,0,0.8);
             padding: 15px;
             border-radius: 10px;
             font-size: 14px;
             z-index: 50;
+            border: 1px solid #333;
         }
         
-        .sensor-debug {
+        .debug-panel {
             position: fixed;
             bottom: 20px;
             right: 20px;
             color: white;
-            background: rgba(0,0,0,0.8);
-            padding: 10px;
-            border-radius: 8px;
+            background: rgba(0,0,0,0.9);
+            padding: 15px;
+            border-radius: 10px;
             font-family: monospace;
             font-size: 12px;
             z-index: 50;
             border: 1px solid #333;
+            min-width: 200px;
+        }
+        
+        .debug-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 3px 0;
+        }
+        
+        .debug-label {
+            color: #888;
+        }
+        
+        .debug-value {
+            color: #fff;
+            font-weight: bold;
         }
         
         .goal-indicator {
             position: fixed;
-            bottom: 80px;
+            bottom: 200px;
             right: 20px;
             color: white;
             background: rgba(46, 204, 113, 0.8);
@@ -102,10 +122,21 @@
             border-radius: 10px;
             font-weight: 600;
             z-index: 50;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 0.8; }
+            50% { opacity: 1; }
         }
         
         #win-modal {
             display: none;
+        }
+        
+        .instruction {
+            margin: 5px 0;
+            padding: 5px 0;
         }
     </style>
 </head>
@@ -113,47 +144,69 @@
     <canvas id="gameCanvas"></canvas>
     
     <div class="controls-info">
-        <div>🎮 <strong>Real-World Physics:</strong></div>
-        <div>📱 Rotate & tilt device</div>
-        <div>🔄 Try upside-down for reverse gravity!</div>
-        <div>🎯 Escape traps by rotating!</div>
+        <div class="instruction">🎮 <strong>Gravity Physics</strong></div>
+        <div class="instruction">📱 Tilt device to control gravity</div>
+        <div class="instruction">🔄 Rotate for different angles</div>
+        <div class="instruction">⌨️ Arrow keys for desktop</div>
     </div>
     
     <div class="goal-indicator">
-        🏁 Tilt to guide the ball!
+        🏁 Guide the ball to the green goal!
     </div>
     
-    <div class="sensor-debug" id="sensor-debug">
-        <div>📱 Orientation Physics:</div>
-        <div>Tilt: <span id="tilt-x">0.0, 0.0</span></div>
-        <div>Gravity X: <span id="gravity-x">0.0</span></div>
-        <div>Gravity Y: <span id="gravity-y">0.8</span></div>
-        <div style="color: #666; font-size: 10px;">Rotation: <span id="tilt-angle">0°</span></div>
-        <div style="color: #666; font-size: 10px;">Method: <span id="orient-method">detecting...</span></div>
-        <div style="color: #666; font-size: 10px;">Raw γ: <span id="raw-gamma">0</span>°</div>
+    <div class="debug-panel">
+        <div style="text-align: center; color: #e74c3c; font-weight: bold; margin-bottom: 8px;">📱 Physics Debug</div>
+        <div class="debug-row">
+            <span class="debug-label">Device Tilt:</span>
+            <span class="debug-value" id="tilt-display">0°, 0°</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Orientation:</span>
+            <span class="debug-value" id="orientation-display">0°</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Gravity X:</span>
+            <span class="debug-value" id="gravity-x-display">0.0</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Gravity Y:</span>
+            <span class="debug-value" id="gravity-y-display">1.0</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Ball Speed:</span>
+            <span class="debug-value" id="speed-display">0.0</span>
+        </div>
+        <div class="debug-row">
+            <span class="debug-label">Sensor:</span>
+            <span class="debug-value" id="sensor-status">❌</span>
+        </div>
     </div>
     
     <div id="permission-modal" class="modal">
         <div class="modal-content">
             <h2>🌍 Gravity Path Runner</h2>
-            <p>Real-world physics! Gravity always points toward the floor.</p>
-            <p>Rotate and tilt your device to escape traps!</p>
-            <p><small>Try flipping your phone upside-down to reverse gravity!</small></p>
-            <button id="permission-btn">Start Game</button>
+            <p>Experience real-world physics! Tilt your device to control gravity and guide the ball through the maze.</p>
+            <div style="margin: 20px 0;">
+                <p><strong>🎯 Goal:</strong> Get the red ball to the green circle</p>
+                <p><strong>📱 Controls:</strong> Tilt your device in any direction</p>
+                <p><strong>🔄 Advanced:</strong> Try rotating your device for different angles</p>
+            </div>
+            <button id="permission-btn">🚀 Start Game</button>
         </div>
     </div>
 
     <div id="win-modal" class="modal">
         <div class="modal-content">
-            <h2>🎉 You Did It!</h2>
-            <p>You successfully navigated the gravity track!</p>
-            <button id="play-again-btn">Play Again</button>
+            <h2>🎉 Amazing!</h2>
+            <p>You successfully navigated the gravity maze!</p>
+            <p>Your mastery of physics is impressive!</p>
+            <button id="play-again-btn">🎮 Play Again</button>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Matter.js aliases
+            // Matter.js setup
             const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
 
             // DOM elements
@@ -162,14 +215,45 @@
             const playAgainBtn = document.getElementById('play-again-btn');
             const permissionModal = document.getElementById('permission-modal');
             const permissionBtn = document.getElementById('permission-btn');
-            const tiltXDisplay = document.getElementById('tilt-x');
-            const gravityXDisplay = document.getElementById('gravity-x');
-            const gravityYDisplay = document.getElementById('gravity-y');
-            const tiltAngleDisplay = document.getElementById('tilt-angle');
-            const orientMethodDisplay = document.getElementById('orient-method');
-            const rawGammaDisplay = document.getElementById('raw-gamma');
+            
+            // Debug displays
+            const tiltDisplay = document.getElementById('tilt-display');
+            const orientationDisplay = document.getElementById('orientation-display');
+            const gravityXDisplay = document.getElementById('gravity-x-display');
+            const gravityYDisplay = document.getElementById('gravity-y-display');
+            const speedDisplay = document.getElementById('speed-display');
+            const sensorStatus = document.getElementById('sensor-status');
 
-            // SVG track data
+            // Game state
+            let ball, goal;
+            let deviceState = {
+                tiltX: 0,      // Left/right tilt (-1 to 1)
+                tiltY: 0,      // Forward/back tilt (-1 to 1)
+                orientation: 0, // Device rotation (0, 90, 180, 270)
+                sensorActive: false
+            };
+            
+            let particles = [];
+            const engine = Engine.create();
+            const world = engine.world;
+
+            // Enhanced render setup
+            const render = Render.create({
+                canvas: canvas,
+                engine: engine,
+                options: {
+                    width: window.innerWidth,
+                    height: window.innerHeight,
+                    wireframes: false,
+                    background: 'transparent',
+                    showDebug: false,
+                    showVelocity: false
+                }
+            });
+
+            const runner = Runner.create();
+
+            // SVG maze data (simplified for better performance)
             const svgData = `
                 <svg xmlns="http://www.w3.org/2000/svg">
                     <rect x="9.05127" y="0.0375977" width="20" height="117.007" fill="#D9D9D9"/>
@@ -226,33 +310,17 @@
                 </svg>
             `;
 
-            // Game variables
-            let ball, goal;
-            let tilt = { x: 0, y: 0, orientation: 0 };
-            let particles = [];
-            const engine = Engine.create();
-            const world = engine.world;
-
-            // Render setup
-            const render = Render.create({
-                canvas: canvas,
-                engine: engine,
-                options: {
-                    width: window.innerWidth,
-                    height: window.innerHeight,
-                    wireframes: false,
-                    background: 'transparent',
-                    showDebug: false
-                }
-            });
-
-            const runner = Runner.create();
-
-            // Create walls from SVG using getCTM method (similar to reference code)
+            // Create maze walls from SVG
             function createWallsFromSVG(svgString, scale, offsetX, offsetY) {
                 const wallOptions = {
                     isStatic: true,
-                    render: { fillStyle: '#cccccc' }
+                    render: { 
+                        fillStyle: '#4a5568',
+                        strokeStyle: '#2d3748',
+                        lineWidth: 1
+                    },
+                    friction: 0.8,
+                    restitution: 0.1
                 };
 
                 const tempDiv = document.createElement('div');
@@ -290,7 +358,7 @@
                 return walls;
             }
 
-            // Game setup function
+            // Game setup
             function setup() {
                 const width = window.innerWidth;
                 const height = window.innerHeight;
@@ -303,34 +371,35 @@
                 World.clear(world);
                 particles = [];
 
-                // Calculate scaling for responsive design
+                // Calculate responsive scaling
                 const svgBounds = { width: 367, height: 967 };
                 const scaleX = width / svgBounds.width;
                 const scaleY = height / svgBounds.height;
-                const scale = Math.min(scaleX, scaleY) * 0.9;
+                const scale = Math.min(scaleX, scaleY) * 0.85;
                 const offsetX = (width - svgBounds.width * scale) / 2;
                 const offsetY = (height - svgBounds.height * scale) / 2;
                 
-                // Create ball at start
+                // Create ball with improved physics
                 const startPos = { x: 20, y: 50 };
-                const ballRadius = 8 * scale;
+                const ballRadius = 10 * scale;
                 const ballX = (startPos.x * scale) + offsetX;
                 const ballY = (startPos.y * scale) + offsetY;
                 
                 ball = Bodies.circle(ballX, ballY, ballRadius, {
-                    restitution: 0.3,
-                    friction: 0.3,
-                    frictionAir: 0.02,
+                    restitution: 0.4,        // Bounce
+                    friction: 0.6,           // Rolling friction
+                    frictionAir: 0.01,       // Air resistance
+                    density: 0.8,            // Mass distribution
                     render: {
                         fillStyle: '#e74c3c',
                         strokeStyle: '#c0392b',
-                        lineWidth: 2
+                        lineWidth: 3
                     }
                 });
 
-                // Create goal at end
+                // Create goal
                 const goalPos = { x: 20, y: 920 };
-                const goalRadius = 15 * scale;
+                const goalRadius = 18 * scale;
                 const goalX = (goalPos.x * scale) + offsetX;
                 const goalY = (goalPos.y * scale) + offsetY;
                 
@@ -340,254 +409,254 @@
                     render: {
                         fillStyle: '#2ecc71',
                         strokeStyle: '#27ae60',
-                        lineWidth: 3
+                        lineWidth: 4
                     }
                 });
 
-                // Create walls from SVG
+                // Create maze walls
                 const mazeWalls = createWallsFromSVG(svgData, scale, offsetX, offsetY);
                 
-                // Add boundaries
+                // Create boundaries
+                const boundaryThickness = 20;
                 const boundaries = [
-                    Bodies.rectangle(width/2, -10, width, 20, { isStatic: true, render: { fillStyle: '#000000' } }),
-                    Bodies.rectangle(width/2, height + 10, width, 20, { isStatic: true, render: { fillStyle: '#000000' } }),
-                    Bodies.rectangle(-10, height/2, 20, height, { isStatic: true, render: { fillStyle: '#000000' } }),
-                    Bodies.rectangle(width + 10, height/2, 20, height, { isStatic: true, render: { fillStyle: '#000000' } })
+                    Bodies.rectangle(width/2, -boundaryThickness/2, width, boundaryThickness, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#2d3748' } 
+                    }),
+                    Bodies.rectangle(width/2, height + boundaryThickness/2, width, boundaryThickness, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#2d3748' } 
+                    }),
+                    Bodies.rectangle(-boundaryThickness/2, height/2, boundaryThickness, height, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#2d3748' } 
+                    }),
+                    Bodies.rectangle(width + boundaryThickness/2, height/2, boundaryThickness, height, { 
+                        isStatic: true, 
+                        render: { fillStyle: '#2d3748' } 
+                    })
                 ];
 
                 World.add(world, [ball, goal, ...mazeWalls, ...boundaries]);
             }
 
-            // Control handling
-            const keys = {};
-            document.addEventListener('keydown', (e) => {
-                keys[e.key] = true;
-                permissionModal.style.display = 'none';
-            });
-            document.addEventListener('keyup', (e) => keys[e.key] = false);
+            // IMPROVED GRAVITY CALCULATION
+            function calculateGravity() {
+                // Start with base gravity pointing down
+                let gravityX = 0;
+                let gravityY = 1;
+                
+                // Get device tilt values
+                const tiltX = deviceState.tiltX;
+                const tiltY = deviceState.tiltY;
+                const orientation = deviceState.orientation;
+                
+                // Calculate gravity magnitude based on tilt
+                const gravityMagnitude = 0.9;
+                const maxTiltAngle = 45; // degrees
+                
+                // Convert tilt to angles (in radians)
+                const tiltAngleX = (tiltX * maxTiltAngle) * (Math.PI / 180);
+                const tiltAngleY = (tiltY * maxTiltAngle) * (Math.PI / 180);
+                
+                // Calculate gravity components based on device orientation
+                switch(orientation) {
+                    case 0:   // Portrait (normal)
+                        gravityX = Math.sin(tiltAngleX) * gravityMagnitude;
+                        gravityY = Math.cos(tiltAngleX) * gravityMagnitude;
+                        break;
+                        
+                    case 90:  // Landscape (rotated left)
+                        gravityX = -Math.sin(tiltAngleY) * gravityMagnitude;
+                        gravityY = Math.sin(tiltAngleX) * gravityMagnitude;
+                        break;
+                        
+                    case 180: // Portrait upside-down
+                        gravityX = -Math.sin(tiltAngleX) * gravityMagnitude;
+                        gravityY = -Math.cos(tiltAngleX) * gravityMagnitude;
+                        break;
+                        
+                    case 270: // Landscape (rotated right)
+                        gravityX = Math.sin(tiltAngleY) * gravityMagnitude;
+                        gravityY = -Math.sin(tiltAngleX) * gravityMagnitude;
+                        break;
+                        
+                    default:
+                        // Handle in-between orientations
+                        gravityX = Math.sin(tiltAngleX) * gravityMagnitude;
+                        gravityY = Math.cos(tiltAngleX) * gravityMagnitude;
+                }
+                
+                return { x: gravityX, y: gravityY };
+            }
 
+            // Control handling with improved physics
             function handleControls() {
                 if (!ball) return;
 
-                // Default gravity: straight down
-                let gravityX = 0, gravityY = 1;
-
-                // Keyboard controls (simulate tilt) - keep for desktop testing
-                if (keys.ArrowUp) {
-                    gravityY = -1; // Up
-                    tilt.y = -1;
-                } else if (keys.ArrowDown) {
-                    gravityY = 1;  // Down
-                    tilt.y = 1;
-                } else if (keys.ArrowLeft) {
-                    gravityX = -1; // Left
-                    tilt.x = -1;
-                } else if (keys.ArrowRight) {
-                    gravityX = 1;  // Right
-                    tilt.x = 1;
-                } else {
-                    // Reset tilt when no keys pressed (unless using mobile sensors)
-                    if (!('DeviceOrientationEvent' in window) || navigator.userAgent.includes('Desktop')) {
-                        tilt.x = 0;
-                        tilt.y = 0;
-                    }
+                // Handle keyboard controls for desktop testing
+                const keys = getCurrentKeys();
+                if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
+                    deviceState.tiltX = keys.ArrowRight ? 0.5 : keys.ArrowLeft ? -0.5 : 0;
+                    deviceState.tiltY = keys.ArrowDown ? 0.5 : keys.ArrowUp ? -0.5 : 0;
                 }
 
-                // Mobile tilt controls: Rotate gravity vector based on device tilt
-                if (Math.abs(tilt.x) > 0.05) {
-                    // Calculate gravity direction based on device orientation
-                    // When device tilts right, gravity should pull down-right
-                    // When device tilts left, gravity should pull down-left
-                    const tiltAngle = tilt.x * (Math.PI / 4); // Convert to radians, max 45°
-                    const gravityMagnitude = 1.0;
-                    
-                    // Rotate gravity vector by tilt angle
-                    gravityX = Math.sin(tiltAngle) * gravityMagnitude;
-                    gravityY = Math.cos(tiltAngle) * gravityMagnitude;
-                    
-                    // This creates natural physics:
-                    // - Device upright (tilt.x = 0): gravity = (0, 1) - straight down
-                    // - Device tilted right (tilt.x > 0): gravity = (+X, +Y) - down-right  
-                    // - Device tilted left (tilt.x < 0): gravity = (-X, +Y) - down-left
-                } else {
-                    // No tilt detected, gravity straight down
-                    gravityX = 0;
-                    gravityY = 1;
-                }
+                // Calculate and apply gravity
+                const gravity = calculateGravity();
+                engine.world.gravity.x = gravity.x;
+                engine.world.gravity.y = gravity.y;
 
-                // Apply rotated gravity
-                engine.world.gravity.x = gravityX * 0.8;
-                engine.world.gravity.y = gravityY * 0.8;
-
-                // Update debug display
-                if (tiltXDisplay) {
-                    tiltXDisplay.textContent = tilt.x.toFixed(2);
-                    gravityXDisplay.textContent = (gravityX * 0.8).toFixed(2);
-                    gravityYDisplay.textContent = (gravityY * 0.8).toFixed(2);
-                }
+                // Update debug displays
+                updateDebugDisplay(gravity);
             }
 
-            // Mobile sensor controls
+            // Keyboard state tracking
+            const keyState = {};
+            function getCurrentKeys() { return keyState; }
+            
+            document.addEventListener('keydown', (e) => {
+                keyState[e.key] = true;
+                if (permissionModal.style.display !== 'none') {
+                    permissionModal.style.display = 'none';
+                }
+            });
+            document.addEventListener('keyup', (e) => keyState[e.key] = false);
+
+            // Device orientation handling
             function enableSensorControls() {
-                // Try to lock screen orientation
-                if (screen.orientation && typeof screen.orientation.lock === 'function') {
-                    try {
-                        screen.orientation.lock('portrait-primary').catch(err => 
-                            console.log('Could not lock screen orientation:', err)
-                        );
-                    } catch (error) {
-                        console.log('Error attempting to lock orientation:', error);
-                    }
-                }
-
-                // Always try legacy motion listener first (more reliable)
-                addLegacyMotionListener();
-            }
-
-            function addLegacyMotionListener() {
-                // For iOS 13+ devices, request permission
+                console.log('Enabling device sensors...');
+                
+                // Request permission on iOS 13+
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission()
-                        .then(state => {
-                            if (state === 'granted') {
-                                console.log('Motion permission granted');
-                                window.addEventListener('deviceorientation', handleLegacyOrientation);
-                                // Also listen for orientation changes
-                                window.addEventListener('orientationchange', () => {
-                                    console.log('Orientation changed to:', window.orientation || screen.orientation?.angle || 'unknown');
-                                });
+                        .then(response => {
+                            if (response === 'granted') {
+                                console.log('Device orientation permission granted');
+                                addOrientationListener();
                             } else {
-                                console.log('Motion permission denied');
+                                console.log('Device orientation permission denied');
+                                fallbackToKeyboard();
                             }
                         })
-                        .catch(err => {
-                            console.error('Motion permission error:', err);
-                            // Try anyway for older devices
-                            window.addEventListener('deviceorientation', handleLegacyOrientation);
-                            window.addEventListener('orientationchange', () => {
-                                console.log('Orientation changed to:', window.orientation || screen.orientation?.angle || 'unknown');
-                            });
+                        .catch(error => {
+                            console.error('Error requesting permission:', error);
+                            addOrientationListener(); // Try anyway
                         });
                 } else {
-                    // For older devices, just add the listener
-                    console.log('Adding device orientation listener (no permission needed)');
-                    window.addEventListener('deviceorientation', handleLegacyOrientation);
-                    window.addEventListener('orientationchange', () => {
-                        console.log('Orientation changed to:', window.orientation || screen.orientation?.angle || 'unknown');
-                    });
+                    // No permission needed, add listener directly
+                    addOrientationListener();
                 }
             }
 
-            function handleLegacyOrientation(event) {
+            function addOrientationListener() {
+                window.addEventListener('deviceorientation', handleDeviceOrientation);
+                window.addEventListener('orientationchange', handleOrientationChange);
+                deviceState.sensorActive = true;
+                console.log('Device orientation listener added');
+            }
+
+            function handleDeviceOrientation(event) {
                 const { beta, gamma, alpha } = event;
                 
-                // Update raw sensor display
-                if (rawGammaDisplay) {
-                    rawGammaDisplay.textContent = Math.round(gamma || 0);
+                if (beta === null || gamma === null) {
+                    return; // No sensor data
                 }
+
+                // Normalize sensor values to -1 to 1 range
+                const maxTilt = 45; // degrees
+                const normalizedGamma = Math.max(-1, Math.min(1, gamma / maxTilt));
+                const normalizedBeta = Math.max(-1, Math.min(1, beta / maxTilt));
                 
-                // Get device orientation angle with multiple fallback methods
-                let orientationAngle = 0;
-                let detectionMethod = 'none';
-                
-                // Method 1: screen.orientation.angle (modern browsers)
-                if (screen.orientation && typeof screen.orientation.angle === 'number') {
-                    orientationAngle = screen.orientation.angle;
-                    detectionMethod = 'screen.orientation';
-                }
-                // Method 2: window.orientation (legacy support)
-                else if (typeof window.orientation === 'number') {
-                    orientationAngle = window.orientation;
-                    detectionMethod = 'window.orientation';
-                }
-                // Method 3: CSS media query detection
-                else {
-                    detectionMethod = 'css-media';
-                    if (window.matchMedia("(orientation: landscape)").matches) {
-                        // Use window dimensions to determine if left or right landscape
-                        orientationAngle = window.innerWidth > window.innerHeight ? 90 : 270;
-                    } else {
-                        orientationAngle = 0; // Portrait
-                    }
-                }
-                
-                // Update detection method display
-                if (orientMethodDisplay) {
-                    orientMethodDisplay.textContent = detectionMethod;
-                }
-                
-                // Normalize orientation angle (some devices report -90 instead of 270)
-                if (orientationAngle < 0) {
-                    orientationAngle += 360;
-                }
-                
-                // Log for debugging
-                if (Math.random() < 0.05) { // Reduced frequency
-                    console.log('Orientation:', orientationAngle, 'method:', detectionMethod, 'gamma:', gamma, 'beta:', beta);
-                }
-                
-                // Process gamma and beta for gravity calculation
-                if (gamma !== null && beta !== null) {
-                    const maxTilt = 45;
-                    
-                    // Normalize sensor values
-                    let normalizedGamma = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
-                    let normalizedBeta = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
-                    
-                    // Adjust for device orientation to maintain real-world gravity
-                    switch(orientationAngle) {
-                        case 0:   // Portrait (normal)
-                            tilt.x = normalizedGamma;   // Left/right tilt
-                            tilt.y = normalizedBeta;    // Forward/back tilt
-                            break;
-                        case 90:  // Landscape (rotated left)
-                            tilt.x = -normalizedBeta;   // Forward/back becomes left/right
-                            tilt.y = normalizedGamma;   // Left/right becomes forward/back
-                            break;
-                        case 180: // Portrait upside-down
-                            tilt.x = -normalizedGamma;  // Flip left/right
-                            tilt.y = -normalizedBeta;   // Flip forward/back
-                            break;
-                        case 270: // Landscape (rotated right)
-                            tilt.x = normalizedBeta;    // Forward/back becomes left/right (flipped)
-                            tilt.y = -normalizedGamma;  // Left/right becomes forward/back (flipped)
-                            break;
-                        default:
-                            tilt.x = normalizedGamma;
-                            tilt.y = normalizedBeta;
-                    }
-                    
-                    // Store orientation for debug display
-                    tilt.orientation = orientationAngle;
-                    
-                } else {
-                    // If no meaningful sensor data, reset to neutral
-                    if (!keys.ArrowUp && !keys.ArrowDown && !keys.ArrowLeft && !keys.ArrowRight) {
-                        tilt.x = 0;
-                        tilt.y = 0;
-                    }
+                // Update device state based on current orientation
+                switch(deviceState.orientation) {
+                    case 0:   // Portrait
+                        deviceState.tiltX = normalizedGamma;
+                        deviceState.tiltY = normalizedBeta;
+                        break;
+                    case 90:  // Landscape left
+                        deviceState.tiltX = -normalizedBeta;
+                        deviceState.tiltY = normalizedGamma;
+                        break;
+                    case 180: // Portrait upside-down
+                        deviceState.tiltX = -normalizedGamma;
+                        deviceState.tiltY = -normalizedBeta;
+                        break;
+                    case 270: // Landscape right
+                        deviceState.tiltX = normalizedBeta;
+                        deviceState.tiltY = -normalizedGamma;
+                        break;
                 }
             }
 
-            // Particle effects
+            function handleOrientationChange() {
+                // Get current orientation
+                let orientation = 0;
+                if (screen.orientation && typeof screen.orientation.angle === 'number') {
+                    orientation = screen.orientation.angle;
+                } else if (typeof window.orientation === 'number') {
+                    orientation = window.orientation;
+                    if (orientation < 0) orientation += 360;
+                }
+                
+                deviceState.orientation = orientation;
+                console.log('Orientation changed to:', orientation);
+            }
+
+            function fallbackToKeyboard() {
+                console.log('Using keyboard controls as fallback');
+                deviceState.sensorActive = false;
+            }
+
+            // Debug display updates
+            function updateDebugDisplay(gravity) {
+                if (tiltDisplay) {
+                    const tiltXDeg = Math.round(deviceState.tiltX * 45);
+                    const tiltYDeg = Math.round(deviceState.tiltY * 45);
+                    tiltDisplay.textContent = `${tiltXDeg}°, ${tiltYDeg}°`;
+                }
+                
+                if (orientationDisplay) {
+                    orientationDisplay.textContent = `${deviceState.orientation}°`;
+                }
+                
+                if (gravityXDisplay) {
+                    gravityXDisplay.textContent = gravity.x.toFixed(2);
+                }
+                
+                if (gravityYDisplay) {
+                    gravityYDisplay.textContent = gravity.y.toFixed(2);
+                }
+                
+                if (speedDisplay && ball) {
+                    const speed = Math.sqrt(ball.velocity.x ** 2 + ball.velocity.y ** 2);
+                    speedDisplay.textContent = speed.toFixed(1);
+                }
+                
+                if (sensorStatus) {
+                    sensorStatus.textContent = deviceState.sensorActive ? '✅' : '⌨️';
+                }
+            }
+
+            // Particle effects for ball trail
             function createParticle(x, y) {
                 return {
                     x: x,
                     y: y,
-                    vx: (Math.random() - 0.5) * 3,
-                    vy: (Math.random() - 0.5) * 3,
+                    vx: (Math.random() - 0.5) * 2,
+                    vy: (Math.random() - 0.5) * 2,
                     life: 1.0,
-                    decay: 0.02,
-                    color: '#e74c3c'
+                    decay: 0.03,
+                    size: 2 + Math.random() * 3,
+                    color: `hsl(${Math.random() * 60 + 300}, 70%, 60%)`
                 };
             }
 
             // Event listeners
             Events.on(engine, 'beforeUpdate', handleControls);
 
-            // Ball trail effect
+            // Ball trail and particle effects
             Events.on(engine, 'afterUpdate', () => {
-                if (ball && Math.random() < 0.3) {
+                if (ball && Math.random() < 0.4) {
                     particles.push(createParticle(ball.position.x, ball.position.y));
                 }
                 
@@ -597,8 +666,8 @@
                     p.x += p.vx;
                     p.y += p.vy;
                     p.life -= p.decay;
-                    p.vx *= 0.98;
-                    p.vy *= 0.98;
+                    p.vx *= 0.99;
+                    p.vy *= 0.99;
                     
                     if (p.life <= 0) {
                         particles.splice(i, 1);
@@ -613,19 +682,20 @@
                         (pair.bodyA === goal && pair.bodyB === ball)) {
                         winModal.style.display = 'flex';
                         Runner.stop(runner);
+                        console.log('Player won!');
                     }
                 }
             });
 
-            // Render particles
+            // Render particle effects
             Events.on(render, 'afterRender', () => {
                 const ctx = render.canvas.getContext('2d');
                 particles.forEach(p => {
                     ctx.save();
-                    ctx.globalAlpha = p.life;
+                    ctx.globalAlpha = p.life * 0.7;
                     ctx.fillStyle = p.color;
                     ctx.beginPath();
-                    ctx.arc(p.x, p.y, 3 * p.life, 0, Math.PI * 2);
+                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
                     ctx.fill();
                     ctx.restore();
                 });
@@ -639,14 +709,13 @@
             });
 
             permissionBtn.addEventListener('click', () => {
-                console.log('Permission button clicked, enabling sensors...');
                 enableSensorControls();
                 permissionModal.style.display = 'none';
             });
 
             window.addEventListener('resize', setup);
 
-            // Initialize game
+            // Initialize
             setup();
             Render.run(render);
             Runner.run(runner, engine);
