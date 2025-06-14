@@ -78,9 +78,23 @@
             z-index: 50;
         }
         
-        .goal-indicator {
+        .sensor-debug {
             position: fixed;
             bottom: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 50;
+            border: 1px solid #333;
+        }
+        
+        .goal-indicator {
+            position: fixed;
+            bottom: 80px;
             right: 20px;
             color: white;
             background: rgba(46, 204, 113, 0.8);
@@ -106,6 +120,16 @@
     
     <div class="goal-indicator">
         🏁 Reach the Goal!
+    </div>
+    
+    <div class="sensor-debug" id="sensor-debug">
+        <div>📱 Sensor Debug:</div>
+        <div>Tilt X: <span id="tilt-x">0.0</span></div>
+        <div>Tilt Y: <span id="tilt-y">0.0</span></div>
+        <div>Gravity X: <span id="gravity-x">0.0</span></div>
+        <div>Gravity Y: <span id="gravity-y">1.0</span></div>
+        <div>Raw β: <span id="raw-beta">0</span>°</div>
+        <div>Raw γ: <span id="raw-gamma">0</span>°</div>
     </div>
     
     <div id="permission-modal" class="modal">
@@ -136,6 +160,12 @@
             const playAgainBtn = document.getElementById('play-again-btn');
             const permissionModal = document.getElementById('permission-modal');
             const permissionBtn = document.getElementById('permission-btn');
+            const tiltXDisplay = document.getElementById('tilt-x');
+            const tiltYDisplay = document.getElementById('tilt-y');
+            const gravityXDisplay = document.getElementById('gravity-x');
+            const gravityYDisplay = document.getElementById('gravity-y');
+            const rawBetaDisplay = document.getElementById('raw-beta');
+            const rawGammaDisplay = document.getElementById('raw-gamma');
 
             // SVG track data
             const svgData = `
@@ -341,20 +371,43 @@
                 let gravityX = 0, gravityY = 1;
 
                 // Keyboard controls (simulate tilt)
-                if (keys.ArrowUp) gravityY = -1;
-                if (keys.ArrowDown) gravityY = 1;
-                if (keys.ArrowLeft) gravityX = -1;
-                if (keys.ArrowRight) gravityX = 1;
+                if (keys.ArrowUp) {
+                    gravityY = -1;
+                    tilt.y = 1; // Simulate forward tilt for debug display
+                } else if (keys.ArrowDown) {
+                    gravityY = 1;
+                    tilt.y = -1; // Simulate backward tilt for debug display
+                } else if (keys.ArrowLeft) {
+                    gravityX = -1;
+                    tilt.x = -1; // Simulate left tilt for debug display
+                } else if (keys.ArrowRight) {
+                    gravityX = 1;
+                    tilt.x = 1; // Simulate right tilt for debug display
+                } else {
+                    // Reset tilt when no keys pressed (unless using mobile sensors)
+                    if (!('DeviceOrientationEvent' in window) || navigator.userAgent.includes('Desktop')) {
+                        tilt.x = 0;
+                        tilt.y = 0;
+                    }
+                }
 
-                // Mobile tilt controls
+                // Mobile tilt controls (INVERTED for natural feel)
                 if (Math.abs(tilt.x) > 0.1 || Math.abs(tilt.y) > 0.1) {
-                    gravityX = tilt.x;
-                    gravityY = tilt.y;
+                    gravityX = tilt.x;  // Keep X as is (left/right tilt)
+                    gravityY = -tilt.y; // INVERT Y (forward tilt should make ball go down)
                 }
 
                 // Apply gravity
                 engine.world.gravity.x = gravityX * 0.8;
                 engine.world.gravity.y = gravityY * 0.8;
+
+                // Update debug display
+                if (tiltXDisplay) {
+                    tiltXDisplay.textContent = tilt.x.toFixed(2);
+                    tiltYDisplay.textContent = tilt.y.toFixed(2);
+                    gravityXDisplay.textContent = (gravityX * 0.8).toFixed(2);
+                    gravityYDisplay.textContent = (gravityY * 0.8).toFixed(2);
+                }
             }
 
             // Mobile sensor controls
@@ -406,8 +459,24 @@
             function handleLegacyOrientation(event) {
                 const { beta, gamma } = event;
                 const maxTilt = 45;
+                
+                // gamma: left/right tilt (-90 to 90)
+                // beta: forward/back tilt (-180 to 180)
+                // Normalize to -1 to 1 range
                 tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
                 tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
+                
+                // Update raw sensor display
+                if (rawBetaDisplay) {
+                    rawBetaDisplay.textContent = Math.round(beta || 0);
+                    rawGammaDisplay.textContent = Math.round(gamma || 0);
+                }
+                
+                // Expected behavior:
+                // - Tilt left (gamma < 0): ball should roll left (tilt.x < 0)
+                // - Tilt right (gamma > 0): ball should roll right (tilt.x > 0)  
+                // - Tilt forward (beta > 0): ball should roll down (gravity.y > 0)
+                // - Tilt back (beta < 0): ball should roll up (gravity.y < 0)
             }
 
             // Particle effects
