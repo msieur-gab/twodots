@@ -3,316 +3,347 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>SVG Path Runner Game</title>
+    <title>SVG Maze Game (Parser Version)</title>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet">
     <style>
         body, html {
             margin: 0;
             padding: 0;
             overflow: hidden;
-            background-color: #000000; /* Black background */
-            height: 100%;
-            width: 100%;
-            font-family: 'Poppins', sans-serif;
-        }
-        canvas {
-            display: block;
-            background-color: #000000; /* Match body background */
-        }
-        .modal {
-            display: none; /* Hidden by default */
-            position: fixed; /* Stay in place */
-            z-index: 100; /* Sit on top */
-            left: 0;
-            top: 0;
-            width: 100%; /* Full width */
-            height: 100%; /* Full height */
-            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            background-color: #000000;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
             justify-content: center;
             align-items: center;
+        }
+        canvas {
+            background-color: transparent;
+        }
+        .modal {
+            display: flex; /* Show modal by default */
+            position: fixed;
+            z-index: 100;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.6);
+            justify-content: center;
+            align-items: center;
+            font-family: 'Poppins', sans-serif;
         }
         .modal-content {
             background-color: #fff;
             padding: 30px;
             border-radius: 15px;
             text-align: center;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
-            animation: fadeIn 0.3s ease-out;
         }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: scale(0.9); }
-            to { opacity: 1; transform: scale(1); }
+        #win-modal {
+            display: none; /* Win modal is hidden initially */
         }
-        .modal-content h2 {
-            margin: 0 0 20px 0;
-            color: #333;
-        }
-        .modal-content button {
-            background: linear-gradient(145deg, #4CAF50, #2E8B57);
-            color: white;
-            border: none;
-            padding: 12px 25px;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 8px;
-            transition: transform 0.2s, box-shadow 0.2s;
-            font-family: 'Poppins', sans-serif;
-        }
-        .modal-content button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
-        }
-
-        #permission-modal .modal-content {
-             background: #fefefe;
-        }
-
-        #permission-modal button {
-            background: linear-gradient(145deg, #2196F3, #0b7dda);
-        }
-
     </style>
 </head>
 <body>
-    <!-- Canvas for the game -->
+    <!-- Canvas for the Matter.js physics simulation -->
     <canvas id="gameCanvas"></canvas>
-
-    <!-- Modal for winning the game -->
-    <div id="win-modal" class="modal">
+    
+    <div id="permission-modal" class="modal">
         <div class="modal-content">
-            <h2>You Reached the End!</h2>
-            <button id="play-again-btn">Play Again</button>
-        </div>
-    </div>
-
-    <!-- Modal for asking for sensor permission -->
-    <div id="permission-modal" class="modal" style="display: flex;">
-         <div class="modal-content">
-            <h2>Tilt to Play!</h2>
-            <p>Click below to enable motion controls.</p>
+            <h2>Tilt to Play</h2>
+            <p>Click to enable motion controls or use arrow keys on desktop.</p>
             <button id="permission-btn">Enable Controls</button>
         </div>
     </div>
 
+    <div id="win-modal" class="modal">
+        <div class="modal-content">
+            <h2>You Win!</h2>
+            <button id="play-again-btn">Play Again</button>
+        </div>
+    </div>
+    
+    <!-- Matter.js Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
     <script>
-        document.addEventListener('DOMContentLoaded', () => {
-            // --- DOM Elements ---
-            const canvas = document.getElementById('gameCanvas');
-            const ctx = canvas.getContext('2d');
-            const winModal = document.getElementById('win-modal');
-            const playAgainBtn = document.getElementById('play-again-btn');
-            const permissionModal = document.getElementById('permission-modal');
-            const permissionBtn = document.getElementById('permission-btn');
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- Matter.js Aliases ---
+        const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
 
-            // --- Game Configuration ---
-            const svgPathData = "M24.3401 0.0375977V74.2329L264.034 112.367V203.998L24.3401 268.223V342.579L167.502 304.219L313.92 343.452V490.441L199.698 556.388L129.138 485.829L24.3401 590.626V656.732H198.455L306.971 594.081V801.322L24.3401 816.302V942.474H0.340134V793.541L282.971 778.559V635.649L204.887 680.732H0.340134V580.685L129.138 451.887L203.645 526.395L289.92 476.584V361.867L167.502 329.065L0.340134 373.857V249.808L240.034 185.582V132.85L0.340134 94.7173V0.0375977H24.3401Z";
-            const mazePath = new Path2D(svgPathData);
-            const svgWidth = 314;  // Known width from SVG data
-            const svgHeight = 943; // Known height from SVG data
+        // --- DOM Elements ---
+        const canvas = document.getElementById('gameCanvas');
+        const winModal = document.getElementById('win-modal');
+        const playAgainBtn = document.getElementById('play-again-btn');
+        const permissionModal = document.getElementById('permission-modal');
+        const permissionBtn = document.getElementById('permission-btn');
 
-            // --- Game State ---
-            let isGameActive = true;
-            let scale, offsetX, offsetY;
-            
-            let ball = {
-                x: 0, y: 0,
-                radius: 8,
-                vx: 0, vy: 0, // velocity
-                color: '#e74c3c'
-            };
+        // --- SVG Data ---
+        const svgData = `
+            <svg xmlns="http://www.w3.org/2000/svg">
+                <rect x="9.05127" y="0.0375977" width="20" height="117.007" fill="#D9D9D9"/>
+                <rect x="293.498" y="93.3536" width="20" height="117.007" fill="#D9D9D9"/>
+                <rect x="9.05127" y="233.574" width="20" height="152.894" fill="#D9D9D9"/>
+                <rect x="54.122" y="266.813" width="20" height="68.0735" fill="#D9D9D9"/>
+                <rect x="248.726" y="132.984" width="20" height="53.5615" fill="#D9D9D9"/>
+                <rect x="341.627" y="328.632" width="20" height="175.02" fill="#D9D9D9"/>
+                <rect x="296.855" y="359.359" width="20" height="118.252" fill="#D9D9D9"/>
+                <rect x="54.122" y="0.0375977" width="20" height="73.4388" fill="#D9D9D9"/>
+                <rect x="115.816" y="113.106" width="20" height="73.4388" fill="#D9D9D9"/>
+                <rect x="163.114" y="120.117" width="20" height="73.4388" fill="#D9D9D9"/>
+                <rect x="183.114" y="176.545" width="20" height="67.2978" transform="rotate(90 183.114 176.545)" fill="#D9D9D9"/>
+                <rect x="227.183" y="307.46" width="20" height="55.8381" transform="rotate(-180 227.183 307.46)" fill="#D9D9D9"/>
+                <rect x="179.886" y="307.46" width="20" height="61.7314" transform="rotate(-180 179.886 307.46)" fill="#D9D9D9"/>
+                <rect x="159.886" y="262.739" width="20" height="67.2978" transform="rotate(-90 159.886 262.739)" fill="#D9D9D9"/>
+                <rect x="130.763" y="477.79" width="20" height="91.2411" transform="rotate(134.836 130.763 477.79)" fill="#D9D9D9"/>
+                <rect x="98.0637" y="511.975" width="20" height="98.0499" transform="rotate(134.836 98.0637 511.975)" fill="#D9D9D9"/>
+                <rect x="74.0663" y="655.362" width="20" height="65.1062" transform="rotate(179.836 74.0663 655.362)" fill="#D9D9D9"/>
+                <rect x="26.9102" y="704.946" width="20" height="127.092" transform="rotate(179.836 26.9102 704.946)" fill="#D9D9D9"/>
+                <rect x="26.4953" y="469.019" width="20" height="67.2978" transform="rotate(-135.164 26.4953 469.019)" fill="#D9D9D9"/>
+                <rect width="20" height="71.4092" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 119.651 681.005)" fill="#D9D9D9"/>
+                <rect width="20" height="76.7381" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 166.946 680.183)" fill="#D9D9D9"/>
+                <rect width="20" height="282.847" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 336.295 636.655)" fill="#D9D9D9"/>
+                <rect width="20" height="129.404" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 141.659 680.138)" fill="#D9D9D9"/>
+                <rect width="20" height="136.587" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 308.231 680.112)" fill="#D9D9D9"/>
+                <rect width="20" height="171.792" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 353.382 808.111)" fill="#D9D9D9"/>
+                <rect width="20" height="98.1222" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 309.926 780.047)" fill="#D9D9D9"/>
+                <rect width="20" height="48.83" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.5046 866.715)" fill="#D9D9D9"/>
+                <rect width="20" height="70.5871" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.8661 965.666)" fill="#D9D9D9"/>
+                <rect width="20" height="174.804" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 29.5146 966.294)" fill="#D9D9D9"/>
+                <rect width="20" height="295.483" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 58.8906 833.75)" fill="#D9D9D9"/>
+                <rect width="20" height="303.392" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 5.91693 792.405)" fill="#D9D9D9"/>
+                <rect x="187.177" y="739.852" width="20" height="67.2978" transform="rotate(89.8361 187.177 739.852)" fill="#D9D9D9"/>
+                <rect width="20" height="71.4092" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 54.3172 913.699)" fill="#D9D9D9"/>
+                <rect width="20" height="76.7381" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 53.4949 866.404)" fill="#D9D9D9"/>
+                <rect x="113.164" y="846.173" width="20" height="67.2978" transform="rotate(-0.163863 113.164 846.173)" fill="#D9D9D9"/>
+                <rect x="56.9546" y="73.4764" width="20" height="252.801" transform="rotate(-80.9809 56.9546 73.4764)" fill="#D9D9D9"/>
+                <rect x="11.9199" y="252.939" width="20" height="265.335" transform="rotate(-104.491 11.9199 252.939)" fill="#D9D9D9"/>
+                <rect x="59.1265" y="286.177" width="20" height="269.804" transform="rotate(-104.491 59.1265 286.177)" fill="#D9D9D9"/>
+                <rect x="59.1265" y="338.497" width="20" height="124.591" transform="rotate(-104.491 59.1265 338.497)" fill="#D9D9D9"/>
+                <rect x="19.8591" y="395.575" width="20" height="190.146" transform="rotate(-104.491 19.8591 395.575)" fill="#D9D9D9"/>
+                <rect x="232.148" y="525.266" width="20" height="99.6203" transform="rotate(-119.187 232.148 525.266)" fill="#D9D9D9"/>
+                <rect x="222.411" y="582.749" width="20" height="164.696" transform="rotate(-119.187 222.411 582.749)" fill="#D9D9D9"/>
+                <rect x="125.57" y="483.193" width="20" height="65.8419" transform="rotate(-135.139 125.57 483.193)" fill="#D9D9D9"/>
+                <rect x="14.412" y="594.89" width="20" height="98.8057" transform="rotate(-135.139 14.412 594.89)" fill="#D9D9D9"/>
+                <rect x="68.275" y="605.178" width="20" height="146.606" transform="rotate(-135.139 68.275 605.178)" fill="#D9D9D9"/>
+                <rect x="145.505" y="438.124" width="20" height="124.647" transform="rotate(-45.4509 145.505 438.124)" fill="#D9D9D9"/>
+                <rect x="144.662" y="501.052" width="20" height="109.481" transform="rotate(-45.4509 144.662 501.052)" fill="#D9D9D9"/>
+                <rect x="206.149" y="307.335" width="20" height="155.362" transform="rotate(-75.6689 206.149 307.335)" fill="#D9D9D9"/>
+                <rect x="193.535" y="348.01" width="20" height="124.136" transform="rotate(-75.6689 193.535 348.01)" fill="#D9D9D9"/>
+                <rect x="163.114" y="136.471" width="20" height="103.76" transform="rotate(-80.9809 163.114 136.471)" fill="#D9D9D9"/>
+                <rect x="15.916" y="113.106" width="20" height="118.227" transform="rotate(-80.9809 15.916 113.106)" fill="#D9D9D9"/>
+            </svg>
+        `;
 
-            let goal = {
-                x: 0, y: 0,
-                radius: 15,
-                color: '#2ecc71'
-            };
-            
-            // --- Physics ---
-            let tilt = { x: 0, y: 0 }; // Stores influence from device tilt
-            const constantGravity = 0.05; // The constant downward pull
-            const tiltMultiplier = 0.1;   // How much the tilt affects the ball
-            const friction = 0.98;        // Slows the ball down over time
+        // --- Game State & Physics ---
+        let ball, goal;
+        let tilt = { x: 0, y: 0 };
+        const engine = Engine.create();
+        const world = engine.world;
+        engine.gravity.y = 1;
 
-            // --- Setup and Resize ---
-            function setup() {
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight;
-
-                const scaleX = canvas.width / svgWidth;
-                const scaleY = canvas.height / svgHeight;
-                scale = Math.min(scaleX, scaleY) * 0.9;
-
-                offsetX = (canvas.width - svgWidth * scale) / 2;
-                offsetY = (canvas.height - svgHeight * scale) / 2;
-                
-                ball.radius = 8 * scale;
-                goal.radius = 15 * scale;
-                
-                resetGame();
+        const render = Render.create({
+            canvas: canvas,
+            engine: engine,
+            options: {
+                width: window.innerWidth,
+                height: window.innerHeight,
+                wireframes: false,
+                background: '#000000'
             }
-
-            function resetGame() {
-                ball.x = 24; // Initial x within the SVG's own coordinate system
-                ball.y = 30; // Initial y
-                ball.vx = 0;
-                ball.vy = 0;
-
-                goal.x = 24;  // Goal x in SVG coords
-                goal.y = 900; // Goal y in SVG coords
-
-                winModal.style.display = 'none';
-                setTimeout(() => { isGameActive = true; }, 500);
-            }
-
-            // --- Game Loop ---
-            function gameLoop() {
-                if (isGameActive) {
-                    // --- Physics Update ---
-                    ball.vx += tilt.x;
-                    ball.vy += constantGravity + tilt.y;
-                    ball.vx *= friction;
-                    ball.vy *= friction;
-                    let nextX = ball.x + ball.vx;
-                    let nextY = ball.y + ball.vy;
-
-                    // --- Collision Detection with the Path ---
-                    ctx.save();
-                    ctx.translate(offsetX, offsetY);
-                    ctx.scale(scale, scale);
-                    if (ctx.isPointInPath(mazePath, nextX, nextY)) {
-                        ball.x = nextX;
-                        ball.y = nextY;
-                    } else {
-                        ball.vx = 0;
-                        ball.vy = 0;
-                    }
-                    ctx.restore();
-                    
-                    // --- Check Win Condition ---
-                    const dx = (goal.x - ball.x) * scale;
-                    const dy = (goal.y - ball.y) * scale;
-                    const distance = Math.sqrt(dx * dx + dy * dy);
-                    if (distance < ball.radius + goal.radius) {
-                        isGameActive = false;
-                        winModal.style.display = 'flex';
-                    }
-                }
-                
-                // --- Drawing ---
-                ctx.clearRect(0, 0, canvas.width, canvas.height); 
-                ctx.save();
-                ctx.translate(offsetX, offsetY);
-                ctx.scale(scale, scale);
-                ctx.fillStyle = '#cccccc';
-                ctx.fill(mazePath);
-                ctx.beginPath();
-                ctx.arc(goal.x, goal.y, goal.radius / scale, 0, Math.PI * 2);
-                ctx.fillStyle = goal.color;
-                ctx.fill();
-                ctx.beginPath();
-                ctx.arc(ball.x, ball.y, ball.radius / scale, 0, Math.PI * 2);
-                ctx.fillStyle = ball.color;
-                ctx.fill();
-                ctx.restore();
-
-                // --- Debug Display ---
-                ctx.fillStyle = 'white';
-                ctx.font = '12px Poppins';
-                ctx.textAlign = 'right';
-                ctx.fillText(`Tilt X: ${tilt.x.toFixed(3)}`, canvas.width - 10, canvas.height - 25);
-                ctx.fillText(`Tilt Y: ${tilt.y.toFixed(3)}`, canvas.width - 10, canvas.height - 10);
-
-
-                requestAnimationFrame(gameLoop);
-            }
-            
-            // --- Control Setup ---
-            function enableControls() {
-                // Use modern Sensor API first, with fallback
-                if ('AbsoluteOrientationSensor' in window) {
-                    try {
-                        const sensor = new AbsoluteOrientationSensor({ frequency: 60 });
-                        sensor.addEventListener('reading', () => {
-                            if (!isGameActive) return;
-                            const q = sensor.quaternion;
-                            let roll = Math.atan2(2 * (q[0] * q[1] + q[3] * q[2]), 1 - 2 * (q[1] * q[1] + q[2] * q[2])); 
-                            let pitch = Math.asin(2 * (q[0] * q[2] - q[3] * q[1])); 
-                            const maxTilt = Math.PI / 4; // 45 degrees in radians
-                            tilt.x = Math.max(-1, Math.min(1, roll / maxTilt)) * tiltMultiplier;
-                            tilt.y = Math.max(-1, Math.min(1, pitch / maxTilt)) * tiltMultiplier;
-                        });
-                        sensor.addEventListener('error', (event) => {
-                            console.error('Sensor error:', event.error.name, event.error.message);
-                            console.log('Falling back to legacy DeviceOrientationEvent.');
-                            addLegacyMotionListener(); 
-                        });
-                        sensor.start();
-                    } catch (error) {
-                        // This will catch the SecurityError if the policy disallows sensor construction
-                        console.error('Failed to construct AbsoluteOrientationSensor:', error.name, error.message);
-                        console.log('Falling back to legacy DeviceOrientationEvent due to construction error.');
-                        addLegacyMotionListener();
-                    }
-                } else if ('DeviceOrientationEvent' in window) {
-                    addLegacyMotionListener(); // Fallback for older browsers
-                } else {
-                    console.log("Device orientation sensors not supported by this browser.");
-                }
-            }
-            
-            // This is the old method, now used as a fallback
-            function addLegacyMotionListener() {
-                // iOS 13+ requires explicit permission for the legacy event
-                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission().then(permissionState => {
-                        if (permissionState === 'granted') {
-                            window.addEventListener('deviceorientation', handleOrientation);
-                        }
-                    }).catch(console.error);
-                } else {
-                    // For other devices, just add the listener
-                    window.addEventListener('deviceorientation', handleOrientation);
-                }
-            }
-
-            function handleOrientation(event) {
-                if (!isGameActive) return;
-                const { beta, gamma } = event; // beta: front-back tilt, gamma: left-right tilt
-                const maxTilt = 45; 
-                tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt)) * tiltMultiplier;
-                tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt)) * tiltMultiplier;
-            }
-
-            document.addEventListener('keydown', event => {
-                if (!isGameActive) return;
-                const keyForce = 0.8; 
-                switch (event.key) {
-                    case 'ArrowUp': ball.vy -= keyForce; break;
-                    case 'ArrowDown': ball.vy += keyForce; break;
-                    case 'ArrowLeft': ball.vx -= keyForce; break;
-                    case 'ArrowRight': ball.vx += keyForce; break;
-                }
-            });
-
-            // --- Event Listeners ---
-            playAgainBtn.addEventListener('click', () => {
-                isGameActive = false; 
-                resetGame();
-            });
-            permissionBtn.addEventListener('click', () => {
-                enableControls();
-                permissionModal.style.display = 'none';
-            });
-            window.addEventListener('resize', setup);
-
-            // --- Initial Start ---
-            setup();
-            gameLoop();
         });
+        const runner = Runner.create();
+        
+        function createWallsFromSVG(svgString, scale, offsetX, offsetY) {
+            const wallOptions = {
+                isStatic: true,
+                render: { fillStyle: '#cccccc' }
+            };
+
+            const tempDiv = document.createElement('div');
+            tempDiv.style.visibility = 'hidden';
+            tempDiv.style.position = 'absolute';
+            tempDiv.innerHTML = svgString;
+            document.body.appendChild(tempDiv);
+            
+            const svgElement = tempDiv.querySelector('svg');
+            const rects = svgElement.querySelectorAll('rect');
+            const walls = [];
+
+            rects.forEach(rect => {
+                const w = parseFloat(rect.getAttribute('width'));
+                const h = parseFloat(rect.getAttribute('height'));
+                const matrix = rect.getCTM();
+                const bbox = rect.getBBox();
+                const localCenterX = bbox.x + w / 2;
+                const localCenterY = bbox.y + h / 2;
+                const finalCenterX = matrix.a * localCenterX + matrix.c * localCenterY + matrix.e;
+                const finalCenterY = matrix.b * localCenterX + matrix.d * localCenterY + matrix.f;
+                const angle = Math.atan2(matrix.b, matrix.a);
+                const worldX = (finalCenterX * scale) + offsetX;
+                const worldY = (finalCenterY * scale) + offsetY;
+
+                walls.push(
+                    Bodies.rectangle(worldX, worldY, w * scale, h * scale, {
+                        ...wallOptions,
+                        angle: angle
+                    })
+                );
+            });
+            
+            document.body.removeChild(tempDiv);
+            return walls;
+        }
+
+        function setup() {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            render.options.width = width;
+            render.options.height = height;
+            render.canvas.width = width;
+            render.canvas.height = height;
+
+            World.clear(world);
+
+            const svgBounds = { width: 367, height: 967 };
+            const scaleX = width / svgBounds.width;
+            const scaleY = height / svgBounds.height;
+            const scale = Math.min(scaleX, scaleY) * 0.9;
+            const offsetX = (width - svgBounds.width * scale) / 2;
+            const offsetY = (height - svgBounds.height * scale) / 2;
+            
+            const startPos = { x: 20, y: 50 };
+            const goalPos = { x: 20, y: 920 };
+
+            const ballRadius = 8 * scale;
+            const ballX = (startPos.x * scale) + offsetX;
+            const ballY = (startPos.y * scale) + offsetY;
+            ball = Bodies.circle(ballX, ballY, ballRadius, {
+                restitution: 0.1,
+                friction: 0.02,
+                render: { fillStyle: '#e74c3c' }
+            });
+
+            const goalRadius = 15 * scale;
+            const goalX = (goalPos.x * scale) + offsetX;
+            const goalY = (goalPos.y * scale) + offsetY;
+            goal = Bodies.circle(goalX, goalY, goalRadius, {
+                isStatic: true,
+                isSensor: true,
+                render: { fillStyle: '#2ecc71' }
+            });
+
+            const mazeWalls = createWallsFromSVG(svgData, scale, offsetX, offsetY);
+            World.add(world, [ball, goal, ...mazeWalls]);
+        }
+        
+        // --- Game Controls ---
+        const keys = {};
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+            permissionModal.style.display = 'none'; // Hide modal on key press
+        });
+        document.addEventListener('keyup', (e) => keys[e.key] = false);
+
+        function handleControls() {
+            if (!ball) return;
+            const forceMagnitude = 0.0005 * ball.mass;
+
+            // Keyboard controls
+            if (keys.ArrowUp) Body.applyForce(ball, ball.position, { x: 0, y: -forceMagnitude });
+            if (keys.ArrowDown) Body.applyForce(ball, ball.position, { x: 0, y: forceMagnitude });
+            if (keys.ArrowLeft) Body.applyForce(ball, ball.position, { x: -forceMagnitude, y: 0 });
+            if (keys.ArrowRight) Body.applyForce(ball, ball.position, { x: forceMagnitude, y: 0 });
+
+            // Apply force from mobile tilt
+            if (tilt.x !== 0 || tilt.y !== 0) {
+                 Body.applyForce(ball, ball.position, { 
+                    x: tilt.x * forceMagnitude * 2, // Multiply tilt force for better response
+                    y: tilt.y * forceMagnitude * 2 
+                });
+            }
+        }
+
+        // --- Sensor API for Mobile ---
+        function enableSensorControls() {
+            // **NEW: Attempt to lock screen orientation**
+            if (screen.orientation && typeof screen.orientation.lock === 'function') {
+                try {
+                    screen.orientation.lock('portrait-primary')
+                        .catch(err => console.error('Could not lock screen orientation:', err));
+                } catch (error) {
+                    console.error('Error attempting to lock orientation:', error);
+                }
+            }
+
+            if ('AbsoluteOrientationSensor' in window) {
+                try {
+                    const sensor = new AbsoluteOrientationSensor({ frequency: 60 });
+                    sensor.addEventListener('reading', () => {
+                        if (!ball) return;
+                        const q = sensor.quaternion;
+                        const roll = Math.atan2(2 * (q[0] * q[1] + q[3] * q[2]), 1 - 2 * (q[1] * q[1] + q[2] * q[2]));
+                        const pitch = Math.asin(2 * (q[0] * q[2] - q[3] * q[1]));
+                        const maxTilt = Math.PI / 4;
+                        tilt.x = Math.max(-1, Math.min(1, roll / maxTilt));
+                        tilt.y = Math.max(-1, Math.min(1, pitch / maxTilt));
+                    });
+                    sensor.start();
+                } catch (error) {
+                    console.error('Sensor API failed, falling back.', error);
+                    addLegacyMotionListener();
+                }
+            } else {
+                addLegacyMotionListener();
+            }
+        }
+
+        function addLegacyMotionListener() {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission().then(state => {
+                    if (state === 'granted') {
+                        window.addEventListener('deviceorientation', handleLegacyOrientation);
+                    }
+                }).catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleLegacyOrientation);
+            }
+        }
+
+        function handleLegacyOrientation(event) {
+            const { beta, gamma } = event;
+            const maxTilt = 45;
+            tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
+            tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
+        }
+
+        // --- Event Listeners ---
+        Events.on(engine, 'beforeUpdate', handleControls);
+        Events.on(engine, 'collisionStart', (event) => {
+            for (const pair of event.pairs) {
+                if ((pair.bodyA === ball && pair.bodyB === goal) || (pair.bodyA === goal && pair.bodyB === ball)) {
+                    winModal.style.display = 'flex';
+                    Runner.stop(runner);
+                }
+            }
+        });
+        playAgainBtn.addEventListener('click', () => {
+            winModal.style.display = 'none';
+            setup();
+            Runner.run(runner, engine);
+        });
+        permissionBtn.addEventListener('click', () => {
+            enableSensorControls();
+            permissionModal.style.display = 'none';
+        });
+        window.addEventListener('resize', setup);
+
+        // --- Initial Start ---
+        setup();
+        Render.run(render);
+        Runner.run(runner, engine);
+    });
     </script>
 </body>
 </html>
