@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SVG Path Runner Game</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600&display=swap" rel="stylesheet">
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000000; /* Black background */
+            height: 100%;
+            width: 100%;
+            font-family: 'Poppins', sans-serif;
+        }
+        canvas {
+            display: block;
+            background-color: #000000; /* Match body background */
+        }
+        .modal {
+            display: none; /* Hidden by default */
+            position: fixed; /* Stay in place */
+            z-index: 100; /* Sit on top */
+            left: 0;
+            top: 0;
+            width: 100%; /* Full width */
+            height: 100%; /* Full height */
+            background-color: rgba(0,0,0,0.6); /* Black w/ opacity */
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+            animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-content h2 {
+            margin: 0 0 20px 0;
+            color: #333;
+        }
+        .modal-content button {
+            background: linear-gradient(145deg, #4CAF50, #2E8B57);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: 'Poppins', sans-serif;
+        }
+        .modal-content button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+        }
+
+        #permission-modal .modal-content {
+             background: #fefefe;
+        }
+
+        #permission-modal button {
+            background: linear-gradient(145deg, #2196F3, #0b7dda);
+        }
+
+    </style>
+</head>
+<body>
+    <!-- Canvas for the game -->
+    <canvas id="gameCanvas"></canvas>
+
+    <!-- Modal for winning the game -->
+    <div id="win-modal" class="modal">
+        <div class="modal-content">
+            <h2>You Reached the End!</h2>
+            <button id="play-again-btn">Play Again</button>
+        </div>
+    </div>
+
+    <!-- Modal for asking for sensor permission -->
+    <div id="permission-modal" class="modal" style="display: flex;">
+         <div class="modal-content">
+            <h2>Tilt to Play!</h2>
+            <p>Click below to enable motion controls.</p>
+            <button id="permission-btn">Enable Controls</button>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- DOM Elements ---
+            const canvas = document.getElementById('gameCanvas');
+            const ctx = canvas.getContext('2d');
+            const winModal = document.getElementById('win-modal');
+            const playAgainBtn = document.getElementById('play-again-btn');
+            const permissionModal = document.getElementById('permission-modal');
+            const permissionBtn = document.getElementById('permission-btn');
+
+            // --- Game Configuration ---
+            const svgPathData = "M24.3401 0.0375977V74.2329L264.034 112.367V203.998L24.3401 268.223V342.579L167.502 304.219L313.92 343.452V490.441L199.698 556.388L129.138 485.829L24.3401 590.626V656.732H198.455L306.971 594.081V801.322L24.3401 816.302V942.474H0.340134V793.541L282.971 778.559V635.649L204.887 680.732H0.340134V580.685L129.138 451.887L203.645 526.395L289.92 476.584V361.867L167.502 329.065L0.340134 373.857V249.808L240.034 185.582V132.85L0.340134 94.7173V0.0375977H24.3401Z";
+            const mazePath = new Path2D(svgPathData);
+            const svgWidth = 314;  // Known width from SVG data
+            const svgHeight = 943; // Known height from SVG data
+
+            // --- Game State ---
+            let isGameActive = true;
+            let scale, offsetX, offsetY;
+            
+            let ball = {
+                x: 0, y: 0,
+                radius: 8,
+                vx: 0, vy: 0, // velocity
+                color: '#e74c3c'
+            };
+
+            let goal = {
+                x: 0, y: 0,
+                radius: 15,
+                color: '#2ecc71'
+            };
+            
+            // --- Physics ---
+            let tilt = { x: 0, y: 0 }; // Stores influence from device tilt
+            const constantGravity = 0.05; // The constant downward pull
+            const tiltMultiplier = 0.1;   // How much the tilt affects the ball
+            const friction = 0.98;        // Slows the ball down over time
+
+            // --- Setup and Resize ---
+            function setup() {
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight;
+
+                const scaleX = canvas.width / svgWidth;
+                const scaleY = canvas.height / svgHeight;
+                scale = Math.min(scaleX, scaleY) * 0.9;
+
+                offsetX = (canvas.width - svgWidth * scale) / 2;
+                offsetY = (canvas.height - svgHeight * scale) / 2;
+                
+                ball.radius = 8 * scale;
+                goal.radius = 15 * scale;
+                
+                resetGame();
+            }
+
+            function resetGame() {
+                ball.x = 24; // Initial x within the SVG's own coordinate system
+                ball.y = 30; // Initial y
+                ball.vx = 0;
+                ball.vy = 0;
+
+                goal.x = 24;  // Goal x in SVG coords
+                goal.y = 900; // Goal y in SVG coords
+
+                winModal.style.display = 'none';
+                setTimeout(() => { isGameActive = true; }, 500);
+            }
+
+            // --- Game Loop ---
+            function gameLoop() {
+                if (isGameActive) {
+                    // --- Physics Update ---
+                    // 1. Apply forces: constant gravity + tilt influence
+                    ball.vx += tilt.x;
+                    ball.vy += constantGravity + tilt.y;
+
+                    // 2. Apply friction
+                    ball.vx *= friction;
+                    ball.vy *= friction;
+
+                    // 3. Calculate next position
+                    let nextX = ball.x + ball.vx;
+                    let nextY = ball.y + ball.vy;
+
+                    // --- Collision Detection with the Path ---
+                    ctx.save();
+                    ctx.translate(offsetX, offsetY);
+                    ctx.scale(scale, scale);
+                    // Check if the ball's next center point is inside the path
+                    if (ctx.isPointInPath(mazePath, nextX, nextY)) {
+                        ball.x = nextX;
+                        ball.y = nextY;
+                    } else {
+                        // If it's going to be outside, stop it from moving further
+                        // This effectively makes the ball "collide" with the invisible wall
+                        ball.vx = 0;
+                        ball.vy = 0;
+                    }
+                    ctx.restore();
+                    
+                    // --- Check Win Condition ---
+                    // Calculate distance between ball and goal centers
+                    const dx = (goal.x - ball.x) * scale;
+                    const dy = (goal.y - ball.y) * scale;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+                    if (distance < ball.radius + goal.radius) {
+                        isGameActive = false;
+                        winModal.style.display = 'flex';
+                    }
+                }
+                
+                // --- Drawing ---
+                ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear entire canvas
+
+                ctx.save();
+                // Apply the scaling and offset to all subsequent drawings
+                ctx.translate(offsetX, offsetY);
+                ctx.scale(scale, scale);
+
+                // Draw the maze path
+                ctx.fillStyle = '#cccccc'; // Light Gray
+                ctx.fill(mazePath);
+
+                // Draw the goal
+                ctx.beginPath();
+                ctx.arc(goal.x, goal.y, goal.radius / scale, 0, Math.PI * 2);
+                ctx.fillStyle = goal.color;
+                ctx.fill();
+
+                // Draw the ball
+                ctx.beginPath();
+                ctx.arc(ball.x, ball.y, ball.radius / scale, 0, Math.PI * 2);
+                ctx.fillStyle = ball.color;
+                ctx.fill();
+
+                ctx.restore();
+
+                requestAnimationFrame(gameLoop);
+            }
+            
+            // --- Control Setup ---
+            function enableControls() {
+                if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') {
+                    // iOS 13+ requires explicit permission
+                    DeviceMotionEvent.requestPermission().then(response => {
+                        if (response === 'granted') addMotionListener();
+                    }).catch(console.error);
+                } else {
+                    // For other devices, just add the listener
+                    addMotionListener();
+                }
+            }
+
+            function addMotionListener() {
+                window.addEventListener('deviceorientation', (event) => {
+                    if (!isGameActive) return;
+                    const { beta, gamma } = event; // beta: front-back tilt, gamma: left-right tilt
+                    const maxTilt = 45; // Max tilt angle to consider
+                    
+                    // Calculate tilt influence, clamped between -1 and 1, then scaled
+                    tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt)) * tiltMultiplier;
+                    tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt)) * tiltMultiplier;
+                }, true);
+            }
+
+            document.addEventListener('keydown', event => {
+                if (!isGameActive) return;
+                const keyForce = 0.8; // How much force a key press applies
+                switch (event.key) {
+                    // Apply an immediate impulse to the ball's velocity
+                    case 'ArrowUp': ball.vy -= keyForce; break;
+                    case 'ArrowDown': ball.vy += keyForce; break;
+                    case 'ArrowLeft': ball.vx -= keyForce; break;
+                    case 'ArrowRight': ball.vx += keyForce; break;
+                }
+            });
+
+            // --- Event Listeners ---
+            playAgainBtn.addEventListener('click', () => {
+                isGameActive = false; // Prevent movement while resetting
+                resetGame();
+            });
+            permissionBtn.addEventListener('click', () => {
+                enableControls();
+                permissionModal.style.display = 'none';
+            });
+            window.addEventListener('resize', setup);
+
+            // --- Initial Start ---
+            setup();
+            gameLoop();
+        });
+    </script>
+</body>
+</html>
