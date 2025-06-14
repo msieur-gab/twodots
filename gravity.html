@@ -114,7 +114,7 @@
     
     <div class="controls-info">
         <div>🎮 <strong>Controls:</strong></div>
-        <div>📱 Tilt device left/right</div>
+        <div>📱 Tilt device to steer gravity</div>
         <div>⌨️ Desktop: Arrow keys</div>
         <div>🎯 Roll to the green goal!</div>
     </div>
@@ -124,19 +124,19 @@
     </div>
     
     <div class="sensor-debug" id="sensor-debug">
-        <div>📱 Tilt Control:</div>
-        <div>Tilt X: <span id="tilt-x">0.0</span></div>
+        <div>📱 Gravity Control:</div>
+        <div>Tilt: <span id="tilt-x">0.0</span></div>
         <div>Gravity X: <span id="gravity-x">0.0</span></div>
         <div>Gravity Y: <span id="gravity-y">0.8</span></div>
+        <div style="color: #666; font-size: 10px;">Angle: <span id="tilt-angle">0°</span></div>
         <div style="color: #666; font-size: 10px;">Raw γ: <span id="raw-gamma">0</span>°</div>
-        <div style="color: #666; font-size: 10px;">Raw β: <span id="raw-beta">0</span>°</div>
     </div>
     
     <div id="permission-modal" class="modal">
         <div class="modal-content">
             <h2>🌍 Gravity Path Runner</h2>
-            <p>Tilt your device left/right to guide the ball through the track!</p>
-            <p><small>On desktop, use arrow keys to control movement</small></p>
+            <p>Tilt your device to rotate gravity and guide the ball through the track!</p>
+            <p><small>Perfect for escaping traps by rotating your device!</small></p>
             <button id="permission-btn">Start Game</button>
         </div>
     </div>
@@ -163,7 +163,7 @@
             const tiltXDisplay = document.getElementById('tilt-x');
             const gravityXDisplay = document.getElementById('gravity-x');
             const gravityYDisplay = document.getElementById('gravity-y');
-            const rawBetaDisplay = document.getElementById('raw-beta');
+            const tiltAngleDisplay = document.getElementById('tilt-angle');
             const rawGammaDisplay = document.getElementById('raw-gamma');
 
             // SVG track data
@@ -366,7 +366,7 @@
             function handleControls() {
                 if (!ball) return;
 
-                // Default gravity: always down, but can be influenced left/right
+                // Default gravity: straight down
                 let gravityX = 0, gravityY = 1;
 
                 // Keyboard controls (simulate tilt) - keep for desktop testing
@@ -390,21 +390,36 @@
                     }
                 }
 
-                // Mobile tilt controls (simplified approach)
-                if (Math.abs(tilt.x) > 0.1) {
-                    // Mix X-axis tilt with downward gravity
-                    gravityX = tilt.x;           // Left/right component from device tilt
-                    gravityY = 1;                // Always pull down (like real gravity)
+                // Mobile tilt controls: Rotate gravity vector based on device tilt
+                if (Math.abs(tilt.x) > 0.05) {
+                    // Calculate gravity direction based on device orientation
+                    // When device tilts right, gravity should pull down-right
+                    // When device tilts left, gravity should pull down-left
+                    const tiltAngle = tilt.x * (Math.PI / 4); // Convert to radians, max 45°
+                    const gravityMagnitude = 1.0;
+                    
+                    // Rotate gravity vector by tilt angle
+                    gravityX = Math.sin(tiltAngle) * gravityMagnitude;
+                    gravityY = Math.cos(tiltAngle) * gravityMagnitude;
+                    
+                    // This creates natural physics:
+                    // - Device upright (tilt.x = 0): gravity = (0, 1) - straight down
+                    // - Device tilted right (tilt.x > 0): gravity = (+X, +Y) - down-right  
+                    // - Device tilted left (tilt.x < 0): gravity = (-X, +Y) - down-left
+                } else {
+                    // No tilt detected, gravity straight down
+                    gravityX = 0;
+                    gravityY = 1;
                 }
 
-                // Apply gravity (always some downward pull + left/right tilt)
-                engine.world.gravity.x = gravityX * 0.6; // Reduced for more subtle effect
-                engine.world.gravity.y = gravityY * 0.8; // Main downward pull
+                // Apply rotated gravity
+                engine.world.gravity.x = gravityX * 0.8;
+                engine.world.gravity.y = gravityY * 0.8;
 
                 // Update debug display
                 if (tiltXDisplay) {
                     tiltXDisplay.textContent = tilt.x.toFixed(2);
-                    gravityXDisplay.textContent = (gravityX * 0.6).toFixed(2);
+                    gravityXDisplay.textContent = (gravityX * 0.8).toFixed(2);
                     gravityYDisplay.textContent = (gravityY * 0.8).toFixed(2);
                 }
             }
@@ -453,15 +468,14 @@
             function handleLegacyOrientation(event) {
                 const { beta, gamma } = event;
                 
-                // Update raw sensor display first
-                if (rawBetaDisplay) {
-                    rawBetaDisplay.textContent = Math.round(beta || 0);
+                // Update raw sensor display
+                if (rawGammaDisplay) {
                     rawGammaDisplay.textContent = Math.round(gamma || 0);
                 }
                 
                 // Log first few events for debugging
                 if (Math.random() < 0.1) { // Log occasionally to avoid spam
-                    console.log('Orientation event:', { beta, gamma });
+                    console.log('Orientation event - gamma:', gamma);
                 }
                 
                 // Only process gamma (left/right tilt) - ignore beta!
@@ -469,14 +483,14 @@
                     const maxTilt = 45; // 45 degrees max useful tilt
                     
                     // gamma: left/right tilt (-90 to 90)
-                    // Map gamma directly to X movement, keep Y always downward
+                    // Map gamma directly to X movement, keep Y neutral for rotation calculation
                     tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
-                    tilt.y = 0; // Always neutral Y - ball always falls down naturally
+                    tilt.y = 0; // Not used in this simplified approach
                     
                     // Expected behavior:
-                    // - Device tilted left (gamma < 0): ball rolls left
-                    // - Device tilted right (gamma > 0): ball rolls right  
-                    // - Gravity always pulls down regardless of beta
+                    // - Device tilted left (gamma < 0): ball rolls down-left
+                    // - Device tilted right (gamma > 0): ball rolls down-right  
+                    // - Gravity rotates with device orientation
                 } else {
                     // If no meaningful sensor data, reset to neutral
                     if (!keys.ArrowUp && !keys.ArrowDown && !keys.ArrowLeft && !keys.ArrowRight) {
