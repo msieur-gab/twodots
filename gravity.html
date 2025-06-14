@@ -113,10 +113,10 @@
     <canvas id="gameCanvas"></canvas>
     
     <div class="controls-info">
-        <div>🎮 <strong>Controls:</strong></div>
-        <div>📱 Tilt device to steer gravity</div>
-        <div>⌨️ Desktop: Arrow keys</div>
-        <div>🎯 Roll to the green goal!</div>
+        <div>🎮 <strong>Real-World Physics:</strong></div>
+        <div>📱 Rotate & tilt device</div>
+        <div>🔄 Try upside-down for reverse gravity!</div>
+        <div>🎯 Escape traps by rotating!</div>
     </div>
     
     <div class="goal-indicator">
@@ -124,19 +124,20 @@
     </div>
     
     <div class="sensor-debug" id="sensor-debug">
-        <div>📱 Gravity Control:</div>
-        <div>Tilt: <span id="tilt-x">0.0</span></div>
+        <div>📱 Real-World Gravity:</div>
+        <div>Tilt: <span id="tilt-x">0.0, 0.0</span></div>
         <div>Gravity X: <span id="gravity-x">0.0</span></div>
         <div>Gravity Y: <span id="gravity-y">0.8</span></div>
-        <div style="color: #666; font-size: 10px;">Angle: <span id="tilt-angle">0°</span></div>
+        <div style="color: #666; font-size: 10px;">Orient: <span id="tilt-angle">0°</span></div>
         <div style="color: #666; font-size: 10px;">Raw γ: <span id="raw-gamma">0</span>°</div>
     </div>
     
     <div id="permission-modal" class="modal">
         <div class="modal-content">
             <h2>🌍 Gravity Path Runner</h2>
-            <p>Tilt your device to rotate gravity and guide the ball through the track!</p>
-            <p><small>Perfect for escaping traps by rotating your device!</small></p>
+            <p>Real-world physics! Gravity always points toward the floor.</p>
+            <p>Rotate and tilt your device to escape traps!</p>
+            <p><small>Try flipping your phone upside-down to reverse gravity!</small></p>
             <button id="permission-btn">Start Game</button>
         </div>
     </div>
@@ -225,7 +226,7 @@
 
             // Game variables
             let ball, goal;
-            let tilt = { x: 0, y: 0 };
+            let tilt = { x: 0, y: 0, orientation: 0 };
             let particles = [];
             const engine = Engine.create();
             const world = engine.world;
@@ -466,7 +467,7 @@
             }
 
             function handleLegacyOrientation(event) {
-                const { beta, gamma } = event;
+                const { beta, gamma, alpha } = event;
                 
                 // Update raw sensor display
                 if (rawGammaDisplay) {
@@ -475,22 +476,57 @@
                 
                 // Log first few events for debugging
                 if (Math.random() < 0.1) { // Log occasionally to avoid spam
-                    console.log('Orientation event - gamma:', gamma);
+                    console.log('Orientation event - gamma:', gamma, 'beta:', beta, 'screen angle:', screen.orientation?.angle || 'unknown');
                 }
                 
-                // Only process gamma (left/right tilt) - ignore beta!
-                if (gamma !== null && Math.abs(gamma) > 0.1) {
-                    const maxTilt = 45; // 45 degrees max useful tilt
+                // Get device orientation angle (0, 90, 180, 270)
+                let orientationAngle = 0;
+                if (screen.orientation && screen.orientation.angle !== undefined) {
+                    orientationAngle = screen.orientation.angle;
+                } else {
+                    // Fallback: try to detect from beta/gamma
+                    if (Math.abs(beta) > 45) {
+                        orientationAngle = beta > 0 ? 180 : 0;
+                    } else if (Math.abs(gamma) > 45) {
+                        orientationAngle = gamma > 0 ? 90 : 270;
+                    }
+                }
+                
+                // Process gamma and beta for gravity calculation
+                if (gamma !== null && beta !== null) {
+                    const maxTilt = 45;
                     
-                    // gamma: left/right tilt (-90 to 90)
-                    // Map gamma directly to X movement, keep Y neutral for rotation calculation
-                    tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
-                    tilt.y = 0; // Not used in this simplified approach
+                    // Normalize sensor values
+                    let normalizedGamma = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
+                    let normalizedBeta = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
                     
-                    // Expected behavior:
-                    // - Device tilted left (gamma < 0): ball rolls down-left
-                    // - Device tilted right (gamma > 0): ball rolls down-right  
-                    // - Gravity rotates with device orientation
+                    // Adjust for device orientation to maintain real-world gravity
+                    // This ensures gravity always points toward the physical floor
+                    switch(orientationAngle) {
+                        case 0:   // Portrait (normal)
+                            tilt.x = normalizedGamma;   // Left/right tilt
+                            tilt.y = normalizedBeta;    // Forward/back tilt
+                            break;
+                        case 90:  // Landscape (rotated left)
+                            tilt.x = -normalizedBeta;   // Forward/back becomes left/right
+                            tilt.y = normalizedGamma;   // Left/right becomes forward/back
+                            break;
+                        case 180: // Portrait upside-down
+                            tilt.x = -normalizedGamma;  // Flip left/right
+                            tilt.y = -normalizedBeta;   // Flip forward/back
+                            break;
+                        case 270: // Landscape (rotated right)
+                            tilt.x = normalizedBeta;    // Forward/back becomes left/right (flipped)
+                            tilt.y = -normalizedGamma;  // Left/right becomes forward/back (flipped)
+                            break;
+                        default:
+                            tilt.x = normalizedGamma;
+                            tilt.y = normalizedBeta;
+                    }
+                    
+                    // Store orientation for debug display
+                    tilt.orientation = orientationAngle;
+                    
                 } else {
                     // If no meaningful sensor data, reset to neutral
                     if (!keys.ArrowUp && !keys.ArrowDown && !keys.ArrowLeft && !keys.ArrowRight) {
