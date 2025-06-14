@@ -137,10 +137,11 @@
 
         // --- Game State & Physics ---
         let ball, goal;
-        let tilt = { x: 0, y: 0 };
         const engine = Engine.create();
         const world = engine.world;
-        engine.gravity.y = 1;
+        // **FIX: Gravity is now controlled by sensors/keys, not constant.**
+        engine.gravity.x = 0;
+        engine.gravity.y = 0;
 
         const render = Render.create({
             canvas: canvas,
@@ -220,7 +221,8 @@
             const ballX = (startPos.x * scale) + offsetX;
             const ballY = (startPos.y * scale) + offsetY;
             ball = Bodies.circle(ballX, ballY, ballRadius, {
-                restitution: 0.1,
+                // **FIX: Increased restitution for more bounce**
+                restitution: 0.4,
                 friction: 0.02,
                 render: { fillStyle: '#e74c3c' }
             });
@@ -243,31 +245,18 @@
         document.addEventListener('keydown', (e) => {
             keys[e.key] = true;
             permissionModal.style.display = 'none'; // Hide modal on key press
+            // For desktop, set a default downward gravity on first keypress
+            if (engine.gravity.y === 0 && engine.gravity.x === 0) {
+                 engine.gravity.y = 1;
+            }
         });
         document.addEventListener('keyup', (e) => keys[e.key] = false);
 
-        function handleControls() {
-            if (!ball) return;
-            const forceMagnitude = 0.0005 * ball.mass;
-
-            // Keyboard controls
-            if (keys.ArrowUp) Body.applyForce(ball, ball.position, { x: 0, y: -forceMagnitude });
-            if (keys.ArrowDown) Body.applyForce(ball, ball.position, { x: 0, y: forceMagnitude });
-            if (keys.ArrowLeft) Body.applyForce(ball, ball.position, { x: -forceMagnitude, y: 0 });
-            if (keys.ArrowRight) Body.applyForce(ball, ball.position, { x: forceMagnitude, y: 0 });
-
-            // Apply force from mobile tilt
-            if (tilt.x !== 0 || tilt.y !== 0) {
-                 Body.applyForce(ball, ball.position, { 
-                    x: tilt.x * forceMagnitude * 2, // Multiply tilt force for better response
-                    y: tilt.y * forceMagnitude * 2 
-                });
-            }
-        }
+        // This event listener is no longer needed as gravity is set directly
+        // Events.on(engine, 'beforeUpdate', handleControls);
 
         // --- Sensor API for Mobile ---
         function enableSensorControls() {
-            // **NEW: Attempt to lock screen orientation**
             if (screen.orientation && typeof screen.orientation.lock === 'function') {
                 try {
                     screen.orientation.lock('portrait-primary')
@@ -286,8 +275,9 @@
                         const roll = Math.atan2(2 * (q[0] * q[1] + q[3] * q[2]), 1 - 2 * (q[1] * q[1] + q[2] * q[2]));
                         const pitch = Math.asin(2 * (q[0] * q[2] - q[3] * q[1]));
                         const maxTilt = Math.PI / 4;
-                        tilt.x = Math.max(-1, Math.min(1, roll / maxTilt));
-                        tilt.y = Math.max(-1, Math.min(1, pitch / maxTilt));
+                        // **FIX: Directly set the engine's gravity vector**
+                        engine.gravity.x = Math.max(-1, Math.min(1, roll / maxTilt));
+                        engine.gravity.y = Math.max(-1, Math.min(1, pitch / maxTilt));
                     });
                     sensor.start();
                 } catch (error) {
@@ -314,12 +304,12 @@
         function handleLegacyOrientation(event) {
             const { beta, gamma } = event;
             const maxTilt = 45;
-            tilt.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
-            tilt.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
+            // **FIX: Directly set the engine's gravity vector**
+            engine.gravity.x = Math.max(-1, Math.min(1, (gamma || 0) / maxTilt));
+            engine.gravity.y = Math.max(-1, Math.min(1, (beta || 0) / maxTilt));
         }
 
         // --- Event Listeners ---
-        Events.on(engine, 'beforeUpdate', handleControls);
         Events.on(engine, 'collisionStart', (event) => {
             for (const pair of event.pairs) {
                 if ((pair.bodyA === ball && pair.bodyB === goal) || (pair.bodyA === goal && pair.bodyB === ball)) {
