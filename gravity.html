@@ -180,6 +180,7 @@
     
     <div class="rotation-indicator">
         <div class="rotation-arrow" id="rotation-arrow"></div>
+        <div style="position: absolute; bottom: -25px; left: 50%; transform: translateX(-50%); font-size: 10px; color: #888; white-space: nowrap;">gravity</div>
     </div>
     
     <div class="goal-indicator">
@@ -514,14 +515,16 @@
                 World.add(world, [ball, goal, ...mazeWalls, ...mazeContainment]);
             }
 
-            // ROTATION-BASED GRAVITY CALCULATION
+            // ROTATION-BASED GRAVITY CALCULATION - FIXED
             function calculateGravityFromRotation() {
-                // Use relative rotation to calculate gravity direction
+                // Calculate gravity direction based on device rotation
+                // relativeRotation = 0° means device upright, gravity points down
+                // relativeRotation = 90° means device rotated right, gravity points right
                 const rotationRadians = deviceState.relativeRotation * (Math.PI / 180);
                 const gravityMagnitude = 0.9;
                 
-                // Calculate gravity components based on device rotation
-                // 0° = gravity down, 90° = gravity right, 180° = gravity up, 270° = gravity left
+                // Calculate gravity components - this makes gravity point toward real-world ground
+                // When device rotates right (clockwise), gravity should pull toward right side of screen
                 const gravityX = Math.sin(rotationRadians) * gravityMagnitude;
                 const gravityY = Math.cos(rotationRadians) * gravityMagnitude;
                 
@@ -536,7 +539,7 @@
                 const keys = getCurrentKeys();
                 if (keys.ArrowLeft || keys.ArrowRight) {
                     // Simulate rotation with arrow keys
-                    const rotationSpeed = 2; // degrees per frame
+                    const rotationSpeed = 3; // degrees per frame
                     if (keys.ArrowLeft) {
                         deviceState.relativeRotation -= rotationSpeed;
                     }
@@ -545,8 +548,8 @@
                     }
                     
                     // Keep rotation in 0-360 range
-                    if (deviceState.relativeRotation < 0) deviceState.relativeRotation += 360;
-                    if (deviceState.relativeRotation >= 360) deviceState.relativeRotation -= 360;
+                    while (deviceState.relativeRotation < 0) deviceState.relativeRotation += 360;
+                    while (deviceState.relativeRotation >= 360) deviceState.relativeRotation -= 360;
                 }
 
                 // Calculate and apply gravity based on rotation
@@ -610,13 +613,24 @@
                 
                 deviceState.sensorActive = true;
                 
-                // Set baseline after a short delay to let sensors stabilize
-                setTimeout(() => {
-                    if (deviceState.lastAlpha !== null) {
-                        deviceState.baselineRotation = deviceState.currentRotation;
+                // Set baseline immediately when first sensor data arrives
+                let baselineSet = false;
+                const setBaseline = (event) => {
+                    if (!baselineSet && event.alpha !== null) {
+                        const alpha = event.alpha < 0 ? event.alpha + 360 : event.alpha;
+                        deviceState.baselineRotation = alpha;
+                        deviceState.currentRotation = alpha;
+                        deviceState.relativeRotation = 0;
+                        baselineSet = true;
                         console.log('Baseline rotation set to:', deviceState.baselineRotation);
                     }
-                }, 1000);
+                };
+                
+                if ('ondeviceorientationabsolute' in window) {
+                    window.addEventListener('deviceorientationabsolute', setBaseline, { once: true });
+                } else {
+                    window.addEventListener('deviceorientation', setBaseline, { once: true });
+                }
             }
 
             function handleDeviceRotation(event) {
@@ -633,10 +647,9 @@
                     // Calculate relative rotation from baseline
                     let relativeRotation = alpha - deviceState.baselineRotation;
                     
-                    // Normalize to -180 to 180, then to 0-360
-                    if (relativeRotation > 180) relativeRotation -= 360;
-                    if (relativeRotation < -180) relativeRotation += 360;
-                    if (relativeRotation < 0) relativeRotation += 360;
+                    // Normalize to 0-360 range (always positive)
+                    while (relativeRotation < 0) relativeRotation += 360;
+                    while (relativeRotation >= 360) relativeRotation -= 360;
                     
                     deviceState.relativeRotation = relativeRotation;
                     
