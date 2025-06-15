@@ -322,11 +322,11 @@
                 if (!sensorActive) sensorActive = true;
 
                 if (useAlpha) {
-                    // Convert degrees to radians
                     const alphaRad = alpha * (Math.PI / 180);
-                    // Gravity points down relative to the compass direction
                     engine.world.gravity.x = Math.sin(alphaRad);
-                    engine.world.gravity.y = Math.cos(alphaRad);
+                    // **FIX:** Use Math.abs() to prevent gravity from ever pointing up.
+                    // This stops the "balloon" effect and makes the ball feel heavy.
+                    engine.world.gravity.y = Math.abs(Math.cos(alphaRad));
                 } else if (useBetaGamma) {
                     const angle = Math.atan2(gamma, beta);
                     engine.world.gravity.x = Math.sin(angle);
