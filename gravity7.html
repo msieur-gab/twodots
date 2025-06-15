@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Gravity Path Runner</title>
+    <title>Gravity Maze Game</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
     <style>
@@ -22,7 +22,6 @@
         
         canvas {
             background-color: transparent;
-            border-radius: 10px;
         }
         
         .modal {
@@ -38,6 +37,10 @@
             align-items: center;
         }
         
+        #win-modal {
+            display: none; /* Hidden by default */
+        }
+
         .modal-content {
             background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
             color: white;
@@ -68,7 +71,7 @@
             box-shadow: 0 6px 20px rgba(231, 76, 60, 0.4);
         }
         
-        .controls-info {
+        .info-panel {
             position: fixed;
             top: 20px;
             left: 20px;
@@ -80,7 +83,7 @@
             z-index: 50;
             border: 1px solid #333;
         }
-        
+
         .debug-panel {
             position: fixed;
             bottom: 20px;
@@ -96,146 +99,75 @@
             min-width: 220px;
         }
         
-        .debug-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 3px 0;
-        }
-        
-        .debug-label {
-            color: #888;
-        }
-        
-        .debug-value {
-            color: #fff;
-            font-weight: bold;
-        }
-        
-        .goal-indicator {
-            position: fixed;
-            bottom: 200px;
-            right: 20px;
-            color: white;
-            background: rgba(46, 204, 113, 0.8);
-            padding: 10px 15px;
-            border-radius: 10px;
-            font-weight: 600;
-            z-index: 50;
-            animation: pulse 2s infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 0.8; }
-            50% { opacity: 1; }
-        }
-        
-        #win-modal {
-            display: none;
-        }
-        
-        .instruction {
-            margin: 5px 0;
-            padding: 5px 0;
-        }
+        .debug-row { display: flex; justify-content: space-between; margin: 3px 0; }
+        .debug-label { color: #888; }
+        .debug-value { color: #fff; font-weight: bold; }
+        .instruction { margin: 5px 0; padding: 5px 0; }
     </style>
 </head>
 <body>
     <canvas id="gameCanvas"></canvas>
     
-    <div class="controls-info">
-        <div class="instruction">🎮 <strong>Tilt Physics</strong></div>
-        <div class="instruction">📱 Tilt device to change gravity</div>
-        <div class="instruction">⌨️ Arrow keys for desktop</div>
-    </div>
-    
-    <div class="goal-indicator">
-        🏁 Tilt to guide the ball!
+    <div class="info-panel">
+        <div class="instruction">🎮 <strong>Gravity Maze</strong></div>
+        <div class="instruction">📱 Rotate device to aim gravity</div>
+        <div class="instruction">🎯 Guide the ball to the green goal</div>
     </div>
     
     <div class="debug-panel">
         <div style="text-align: center; color: #e74c3c; font-weight: bold; margin-bottom: 8px;">🧭 Tilt Debug</div>
-        <div class="debug-row">
-            <span class="debug-label">Tilt β (front/back):</span>
-            <span class="debug-value" id="beta-display">N/A</span>
-        </div>
-        <div class="debug-row">
-            <span class="debug-label">Tilt γ (left/right):</span>
-            <span class="debug-value" id="gamma-display">N/A</span>
-        </div>
-        <div class="debug-row">
-            <span class="debug-label">Gravity X:</span>
-            <span class="debug-value" id="gravity-x-display">0.0</span>
-        </div>
-        <div class="debug-row">
-            <span class="debug-label">Gravity Y:</span>
-            <span class="debug-value" id="gravity-y-display">1.0</span>
-        </div>
-        <div class="debug-row">
-            <span class="debug-label">Ball Speed:</span>
-            <span class="debug-value" id="speed-display">0.0</span>
-        </div>
-        <div class="debug-row">
-            <span class="debug-label">Sensor:</span>
-            <span class="debug-value" id="sensor-status">❌</span>
-        </div>
+        <div class="debug-row"><span class="debug-label">Tilt β (Y):</span><span class="debug-value" id="beta-display">N/A</span></div>
+        <div class="debug-row"><span class="debug-label">Tilt γ (X):</span><span class="debug-value" id="gamma-display">N/A</span></div>
+        <div class="debug-row"><span class="debug-label">Gravity X:</span><span class="debug-value" id="gravity-x-display">0.0</span></div>
+        <div class="debug-row"><span class="debug-label">Gravity Y:</span><span class="debug-value" id="gravity-y-display">1.0</span></div>
+        <div class="debug-row"><span class="debug-label">Sensor:</span><span class="debug-value" id="sensor-status">❌</span></div>
     </div>
     
     <div id="permission-modal" class="modal">
         <div class="modal-content">
-            <h2>🧭 Gravity Tilt Runner</h2>
-            <p>Control gravity by tilting your device!</p>
-            <div style="margin: 20px 0;">
-                <p><strong>🎯 Goal:</strong> Get the red ball to the green circle</p>
-                <p><strong>🔄 Controls:</strong> Physically tilt your device</p>
-            </div>
+            <h2>🧭 Gravity Maze Game</h2>
+            <p>Control the direction of gravity by rotating your device.</p>
             <button id="permission-btn">🚀 Start Game</button>
         </div>
     </div>
-
+    
     <div id="win-modal" class="modal">
         <div class="modal-content">
-            <h2>🎉 Master of Gravity!</h2>
-            <p>You successfully mastered tilt control!</p>
+            <h2>🎉 You Win!</h2>
+            <p>You have mastered gravity!</p>
             <button id="play-again-btn">🎮 Play Again</button>
         </div>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', () => {
-            // Matter.js setup
-            const { Engine, Render, Runner, World, Bodies, Body, Events } = Matter;
+            const { Engine, Render, Runner, World, Bodies, Events } = Matter;
 
             // DOM elements
             const canvas = document.getElementById('gameCanvas');
-            const winModal = document.getElementById('win-modal');
-            const playAgainBtn = document.getElementById('play-again-btn');
             const permissionModal = document.getElementById('permission-modal');
             const permissionBtn = document.getElementById('permission-btn');
+            const winModal = document.getElementById('win-modal');
+            const playAgainBtn = document.getElementById('play-again-btn');
             
             // Debug displays
             const betaDisplay = document.getElementById('beta-display');
             const gammaDisplay = document.getElementById('gamma-display');
             const gravityXDisplay = document.getElementById('gravity-x-display');
             const gravityYDisplay = document.getElementById('gravity-y-display');
-            const speedDisplay = document.getElementById('speed-display');
             const sensorStatus = document.getElementById('sensor-status');
 
-            // Game state
+            // --- Game State ---
             let ball, goal;
             let sensorActive = false;
             let tiltData = { beta: null, gamma: null };
-            let particles = [];
-            let wallGeometries = [];
+            let ballHistory = [];
+            const historyLength = 50;
             
-            // NEW: State for tilt calibration and dead zone
-            let initialTilt = { beta: null, gamma: null };
-            let isCalibrated = false;
-            const TILT_THRESHOLD = 5; // The tilt angle (in degrees) needed to start moving the ball.
-
+            // --- Engine Setup ---
             const engine = Engine.create();
             const world = engine.world;
-            // Gravity is now fully controlled by the device's tilt
-            world.gravity.y = 0;
+            world.gravity.y = 1;
             world.gravity.x = 0;
 
             const render = Render.create({
@@ -246,300 +178,174 @@
                     height: window.innerHeight,
                     wireframes: false,
                     background: 'transparent',
-                    showDebug: false,
-                    showVelocity: false
                 }
             });
 
             const runner = Runner.create();
 
-            // SVG maze data remains the same
-            const svgData = `
-                <svg xmlns="http://www.w3.org/2000/svg">
-                    <rect x="9.05127" y="0.0375977" width="20" height="117.007" fill="#D9D9D9"/>
-                    <rect x="293.498" y="93.3536" width="20" height="117.007" fill="#D9D9D9"/>
-                    <rect x="9.05127" y="233.574" width="20" height="152.894" fill="#D9D9D9"/>
-                    <rect x="54.122" y="266.813" width="20" height="68.0735" fill="#D9D9D9"/>
-                    <rect x="248.726" y="132.984" width="20" height="53.5615" fill="#D9D9D9"/>
-                    <rect x="341.627" y="328.632" width="20" height="175.02" fill="#D9D9D9"/>
-                    <rect x="296.855" y="359.359" width="20" height="118.252" fill="#D9D9D9"/>
-                    <rect x="54.122" y="0.0375977" width="20" height="73.4388" fill="#D9D9D9"/>
-                    <rect x="115.816" y="113.106" width="20" height="73.4388" fill="#D9D9D9"/>
-                    <rect x="163.114" y="120.117" width="20" height="73.4388" fill="#D9D9D9"/>
-                    <rect x="183.114" y="176.545" width="20" height="67.2978" transform="rotate(90 183.114 176.545)" fill="#D9D9D9"/>
-                    <rect x="227.183" y="307.46" width="20" height="55.8381" transform="rotate(-180 227.183 307.46)" fill="#D9D9D9"/>
-                    <rect x="179.886" y="307.46" width="20" height="61.7314" transform="rotate(-180 179.886 307.46)" fill="#D9D9D9"/>
-                    <rect x="159.886" y="262.739" width="20" height="67.2978" transform="rotate(-90 159.886 262.739)" fill="#D9D9D9"/>
-                    <rect x="130.763" y="477.79" width="20" height="91.2411" transform="rotate(134.836 130.763 477.79)" fill="#D9D9D9"/>
-                    <rect x="98.0637" y="511.975" width="20" height="98.0499" transform="rotate(134.836 98.0637 511.975)" fill="#D9D9D9"/>
-                    <rect x="74.0663" y="655.362" width="20" height="65.1062" transform="rotate(179.836 74.0663 655.362)" fill="#D9D9D9"/>
-                    <rect x="26.9102" y="704.946" width="20" height="127.092" transform="rotate(179.836 26.9102 704.946)" fill="#D9D9D9"/>
-                    <rect x="26.4953" y="469.019" width="20" height="67.2978" transform="rotate(-135.164 26.4953 469.019)" fill="#D9D9D9"/>
-                    <rect width="20" height="71.4092" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 119.651 681.005)" fill="#D9D9D9"/>
-                    <rect width="20" height="76.7381" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 166.946 680.183)" fill="#D9D9D9"/>
-                    <rect width="20" height="282.847" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 336.295 636.655)" fill="#D9D9D9"/>
-                    <rect width="20" height="129.404" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 141.659 680.138)" fill="#D9D9D9"/>
-                    <rect width="20" height="136.587" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 308.231 680.112)" fill="#D9D9D9"/>
-                    <rect width="20" height="171.792" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 353.382 808.111)" fill="#D9D9D9"/>
-                    <rect width="20" height="98.1222" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 309.926 780.047)" fill="#D9D9D9"/>
-                    <rect width="20" height="48.83" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.5046 866.715)" fill="#D9D9D9"/>
-                    <rect width="20" height="70.5871" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.8661 965.666)" fill="#D9D9D9"/>
-                    <rect width="20" height="174.804" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 29.5146 966.294)" fill="#D9D9D9"/>
-                    <rect width="20" height="295.483" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 58.8906 833.75)" fill="#D9D9D9"/>
-                    <rect width="20" height="303.392" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 5.91693 792.405)" fill="#D9D9D9"/>
-                    <rect x="187.177" y="739.852" width="20" height="67.2978" transform="rotate(89.8361 187.177 739.852)" fill="#D9D9D9"/>
-                    <rect width="20" height="71.4092" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 54.3172 913.699)" fill="#D9D9D9"/>
-                    <rect width="20" height="76.7381" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 53.4949 866.404)" fill="#D9D9D9"/>
-                    <rect x="113.164" y="846.173" width="20" height="67.2978" transform="rotate(-0.163863 113.164 846.173)" fill="#D9D9D9"/>
-                    <rect x="56.9546" y="73.4764" width="20" height="252.801" transform="rotate(-80.9809 56.9546 73.4764)" fill="#D9D9D9"/>
-                    <rect x="11.9199" y="252.939" width="20" height="265.335" transform="rotate(-104.491 11.9199 252.939)" fill="#D9D9D9"/>
-                    <rect x="59.1265" y="286.177" width="20" height="269.804" transform="rotate(-104.491 59.1265 286.177)" fill="#D9D9D9"/>
-                    <rect x="59.1265" y="338.497" width="20" height="124.591" transform="rotate(-104.491 59.1265 338.497)" fill="#D9D9D9"/>
-                    <rect x="19.8591" y="395.575" width="20" height="190.146" transform="rotate(-104.491 19.8591 395.575)" fill="#D9D9D9"/>
-                    <rect x="232.148" y="525.266" width="20" height="99.6203" transform="rotate(-119.187 232.148 525.266)" fill="#D9D9D9"/>
-                    <rect x="222.411" y="582.749" width="20" height="164.696" transform="rotate(-119.187 222.411 582.749)" fill="#D9D9D9"/>
-                    <rect x="125.57" y="483.193" width="20" height="65.8419" transform="rotate(-135.139 125.57 483.193)" fill="#D9D9D9"/>
-                    <rect x="14.412" y="594.89" width="20" height="98.8057" transform="rotate(-135.139 14.412 594.89)" fill="#D9D9D9"/>
-                    <rect x="68.275" y="605.178" width="20" height="146.606" transform="rotate(-135.139 68.275 605.178)" fill="#D9D9D9"/>
-                    <rect x="145.505" y="438.124" width="20" height="124.647" transform="rotate(-45.4509 145.505 438.124)" fill="#D9D9D9"/>
-                    <rect x="144.662" y="501.052" width="20" height="109.481" transform="rotate(-45.4509 144.662 501.052)" fill="#D9D9D9"/>
-                    <rect x="206.149" y="307.335" width="20" height="155.362" transform="rotate(-75.6689 206.149 307.335)" fill="#D9D9D9"/>
-                    <rect x="193.535" y="348.01" width="20" height="124.136" transform="rotate(-75.6689 193.535 348.01)" fill="#D9D9D9"/>
-                    <rect x="163.114" y="136.471" width="20" height="103.76" transform="rotate(-80.9809 163.114 136.471)" fill="#D9D9D9"/>
-                    <rect x="15.916" y="113.106" width="20" height="118.227" transform="rotate(-80.9809 15.916 113.106)" fill="#D9D9D9"/>
-                </svg>
-            `;
+            // --- SVG Maze Data ---
+            const svgData = `<svg xmlns="http://www.w3.org/2000/svg"><rect x="9.05127" y="0.0375977" width="20" height="117.007" fill="#D9D9D9"/><rect x="293.498" y="93.3536" width="20" height="117.007" fill="#D9D9D9"/><rect x="9.05127" y="233.574" width="20" height="152.894" fill="#D9D9D9"/><rect x="54.122" y="266.813" width="20" height="68.0735" fill="#D9D9D9"/><rect x="248.726" y="132.984" width="20" height="53.5615" fill="#D9D9D9"/><rect x="341.627" y="328.632" width="20" height="175.02" fill="#D9D9D9"/><rect x="296.855" y="359.359" width="20" height="118.252" fill="#D9D9D9"/><rect x="54.122" y="0.0375977" width="20" height="73.4388" fill="#D9D9D9"/><rect x="115.816" y="113.106" width="20" height="73.4388" fill="#D9D9D9"/><rect x="163.114" y="120.117" width="20" height="73.4388" fill="#D9D9D9"/><rect x="183.114" y="176.545" width="20" height="67.2978" transform="rotate(90 183.114 176.545)" fill="#D9D9D9"/><rect x="227.183" y="307.46" width="20" height="55.8381" transform="rotate(-180 227.183 307.46)" fill="#D9D9D9"/><rect x="179.886" y="307.46" width="20" height="61.7314" transform="rotate(-180 179.886 307.46)" fill="#D9D9D9"/><rect x="159.886" y="262.739" width="20" height="67.2978" transform="rotate(-90 159.886 262.739)" fill="#D9D9D9"/><rect x="130.763" y="477.79" width="20" height="91.2411" transform="rotate(134.836 130.763 477.79)" fill="#D9D9D9"/><rect x="98.0637" y="511.975" width="20" height="98.0499" transform="rotate(134.836 98.0637 511.975)" fill="#D9D9D9"/><rect x="74.0663" y="655.362" width="20" height="65.1062" transform="rotate(179.836 74.0663 655.362)" fill="#D9D9D9"/><rect x="26.9102" y="704.946" width="20" height="127.092" transform="rotate(179.836 26.9102 704.946)" fill="#D9D9D9"/><rect x="26.4953" y="469.019" width="20" height="67.2978" transform="rotate(-135.164 26.4953 469.019)" fill="#D9D9D9"/><rect width="20" height="71.4092" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 119.651 681.005)" fill="#D9D9D9"/><rect width="20" height="76.7381" transform="matrix(0.999997 -0.00223831 0.00365421 0.999993 166.946 680.183)" fill="#D9D9D9"/><rect width="20" height="282.847" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 336.295 636.655)" fill="#D9D9D9"/><rect width="20" height="129.404" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 141.659 680.138)" fill="#D9D9D9"/><rect width="20" height="136.587" transform="matrix(0.00223827 0.999997 -0.999993 0.00365417 308.231 680.112)" fill="#D9D9D9"/><rect width="20" height="171.792" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 353.382 808.111)" fill="#D9D9D9"/><rect width="20" height="98.1222" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 309.926 780.047)" fill="#D9D9D9"/><rect width="20" height="48.83" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.5046 866.715)" fill="#D9D9D9"/><rect width="20" height="70.5871" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 72.8661 965.666)" fill="#D9D9D9"/><rect width="20" height="174.804" transform="matrix(-0.999997 0.00223823 -0.00365412 -0.999993 29.5146 966.294)" fill="#D9D9D9"/><rect width="20" height="295.483" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 58.8906 833.75)" fill="#D9D9D9"/><rect width="20" height="303.392" transform="matrix(-0.0370875 -0.999312 0.999259 -0.0385024 5.91693 792.405)" fill="#D9D9D9"/><rect x="187.177" y="739.852" width="20" height="67.2978" transform="rotate(89.8361 187.177 739.852)" fill="#D9D9D9"/><rect width="20" height="71.4092" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 54.3172 913.699)" fill="#D9D9D9"/><rect width="20" height="76.7381" transform="matrix(-0.00223836 -0.999997 0.999993 -0.00365426 53.4949 866.404)" fill="#D9D9D9"/><rect x="113.164" y="846.173" width="20" height="67.2978" transform="rotate(-0.163863 113.164 846.173)" fill="#D9D9D9"/><rect x="56.9546" y="73.4764" width="20" height="252.801" transform="rotate(-80.9809 56.9546 73.4764)" fill="#D9D9D9"/><rect x="11.9199" y="252.939" width="20" height="265.335" transform="rotate(-104.491 11.9199 252.939)" fill="#D9D9D9"/><rect x="59.1265" y="286.177" width="20" height="269.804" transform="rotate(-104.491 59.1265 286.177)" fill="#D9D9D9"/><rect x="59.1265" y="338.497" width="20" height="124.591" transform="rotate(-104.491 59.1265 338.497)" fill="#D9D9D9"/><rect x="19.8591" y="395.575" width="20" height="190.146" transform="rotate(-104.491 19.8591 395.575)" fill="#D9D9D9"/><rect x="232.148" y="525.266" width="20" height="99.6203" transform="rotate(-119.187 232.148 525.266)" fill="#D9D9D9"/><rect x="222.411" y="582.749" width="20" height="164.696" transform="rotate(-119.187 222.411 582.749)" fill="#D9D9D9"/><rect x="125.57" y="483.193" width="20" height="65.8419" transform="rotate(-135.139 125.57 483.193)" fill="#D9D9D9"/><rect x="14.412" y="594.89" width="20" height="98.8057" transform="rotate(-135.139 14.412 594.89)" fill="#D9D9D9"/><rect x="68.275" y="605.178" width="20" height="146.606" transform="rotate(-135.139 68.275 605.178)" fill="#D9D9D9"/><rect x="145.505" y="438.124" width="20" height="124.647" transform="rotate(-45.4509 145.505 438.124)" fill="#D9D9D9"/><rect x="144.662" y="501.052" width="20" height="109.481" transform="rotate(-45.4509 144.662 501.052)" fill="#D9D9D9"/><rect x="206.149" y="307.335" width="20" height="155.362" transform="rotate(-75.6689 206.149 307.335)" fill="#D9D9D9"/><rect x="193.535" y="348.01" width="20" height="124.136" transform="rotate(-75.6689 193.535 348.01)" fill="#D9D9D9"/><rect x="163.114" y="136.471" width="20" height="103.76" transform="rotate(-80.9809 163.114 136.471)" fill="#D9D9D9"/><rect x="15.916" y="113.106" width="20" height="118.227" transform="rotate(-80.9809 15.916 113.106)" fill="#D9D9D9"/></svg>`;
 
+            // --- Helper Functions ---
             function createWallsFromSVG(svgString, scale, offsetX, offsetY) {
                 const wallOptions = {
                     isStatic: true,
                     render: { 
-                        visible: false
+                        fillStyle: '#4a5568',
+                        strokeStyle: '#2d3748',
+                        lineWidth: 1
                     },
                     friction: 0.8,
                     restitution: 0.1
                 };
 
                 const tempDiv = document.createElement('div');
+                // **FIX:** Make the temporary div invisible and add it to the DOM
                 tempDiv.style.visibility = 'hidden';
                 tempDiv.style.position = 'absolute';
                 tempDiv.innerHTML = svgString;
                 document.body.appendChild(tempDiv);
                 
-                const svgElement = tempDiv.querySelector('svg');
-                const rects = svgElement.querySelectorAll('rect');
                 const walls = [];
-
-                rects.forEach(rect => {
+                // Query all rects from the appended SVG element
+                tempDiv.querySelectorAll('rect').forEach(rect => {
                     const w = parseFloat(rect.getAttribute('width'));
                     const h = parseFloat(rect.getAttribute('height'));
+                    // getCTM() now works correctly because the element is in the DOM
                     const matrix = rect.getCTM();
                     const bbox = rect.getBBox();
-                    const localCenterX = bbox.x + w / 2;
-                    const localCenterY = bbox.y + h / 2;
-                    const finalCenterX = matrix.a * localCenterX + matrix.c * localCenterY + matrix.e;
-                    const finalCenterY = matrix.b * localCenterX + matrix.d * localCenterY + matrix.f;
-                    const angle = Math.atan2(matrix.b, matrix.a);
-                    
-                    const scaledW = w * scale;
-                    const scaledH = h * scale;
-                    const worldX = (finalCenterX * scale) + offsetX;
-                    const worldY = (finalCenterY * scale) + offsetY;
-
-                    wallGeometries.push({
-                        x: worldX,
-                        y: worldY,
-                        w: scaledW,
-                        h: scaledH,
-                        angle: angle
-                    });
-
-                    walls.push(
-                        Bodies.rectangle(worldX, worldY, scaledW, scaledH, {
-                            ...wallOptions,
-                            angle: angle
-                        })
-                    );
+                    const centerX = matrix.a * (bbox.x + w / 2) + matrix.c * (bbox.y + h / 2) + matrix.e;
+                    const centerY = matrix.b * (bbox.x + w / 2) + matrix.d * (bbox.y + h / 2) + matrix.f;
+                    walls.push(Bodies.rectangle( (centerX * scale) + offsetX, (centerY * scale) + offsetY, w * scale, h * scale, { ...wallOptions, angle: Math.atan2(matrix.b, matrix.a) }));
                 });
-                
+
+                // **FIX:** Clean up by removing the temporary div
                 document.body.removeChild(tempDiv);
+
                 return walls;
             }
 
+            // --- Game Setup Function ---
             function setup() {
+                World.clear(world);
+                ballHistory = [];
+
                 const width = window.innerWidth;
                 const height = window.innerHeight;
-
                 render.options.width = width;
                 render.options.height = height;
                 render.canvas.width = width;
                 render.canvas.height = height;
-
-                World.clear(world);
-                particles = [];
-                wallGeometries = [];
-
+                
                 const svgBounds = { width: 367, height: 967 };
-                const scaleX = width / svgBounds.width;
-                const scaleY = height / svgBounds.height;
-                const scale = Math.min(scaleX, scaleY) * 0.95; 
+                const scale = Math.min(width / svgBounds.width, height / svgBounds.height) * 0.85;
                 const offsetX = (width - svgBounds.width * scale) / 2;
                 const offsetY = (height - svgBounds.height * scale) / 2;
                 
+                // Create ball
                 const startPos = { x: 20, y: 50 };
-                const ballRadius = 10 * scale;
-                const ballX = (startPos.x * scale) + offsetX;
-                const ballY = (startPos.y * scale) + offsetY;
-                
-                ball = Bodies.circle(ballX, ballY, ballRadius, {
-                    restitution: 0.4,
-                    friction: 0.6,
-                    frictionAir: 0.01,
-                    density: 0.8,
-                    render: {
-                        fillStyle: '#e74c3c',
-                        strokeStyle: '#c0392b',
-                        lineWidth: 3
-                    }
+                ball = Bodies.circle((startPos.x * scale) + offsetX, (startPos.y * scale) + offsetY, 10 * scale, {
+                    restitution: 0.4, friction: 0.6, frictionAir: 0.01, density: 0.8,
+                    render: { fillStyle: '#e74c3c', strokeStyle: '#c0392b', lineWidth: 3 }
                 });
 
+                // Create goal
                 const goalPos = { x: 20, y: 920 };
-                const goalRadius = 18 * scale;
-                const goalX = (goalPos.x * scale) + offsetX;
-                const goalY = (goalPos.y * scale) + offsetY;
-                
-                goal = Bodies.circle(goalX, goalY, goalRadius, {
-                    isStatic: true,
-                    isSensor: true,
-                    render: {
-                        fillStyle: '#2ecc71',
-                        strokeStyle: '#27ae60',
-                        lineWidth: 4
-                    }
+                goal = Bodies.circle((goalPos.x * scale) + offsetX, (goalPos.y * scale) + offsetY, 18 * scale, {
+                    isStatic: true, isSensor: true,
+                    render: { fillStyle: '#2ecc71', strokeStyle: '#27ae60', lineWidth: 4 }
                 });
 
                 const mazeWalls = createWallsFromSVG(svgData, scale, offsetX, offsetY);
-                
-                const boundaryThickness = 50;
                 const boundaries = [
-                    Bodies.rectangle(width/2, -boundaryThickness/2, width, boundaryThickness, { isStatic: true, render: { visible: false } }),
-                    Bodies.rectangle(width/2, height + boundaryThickness/2, width, boundaryThickness, { isStatic: true, render: { visible: false } }),
-                    Bodies.rectangle(-boundaryThickness/2, height/2, boundaryThickness, height, { isStatic: true, render: { visible: false } }),
-                    Bodies.rectangle(width + boundaryThickness/2, height/2, boundaryThickness, height, { isStatic: true, render: { visible: false } })
+                    Bodies.rectangle(width/2, -25, width, 50, { isStatic: true, render: { visible: false } }),
+                    Bodies.rectangle(width/2, height + 25, width, 50, { isStatic: true, render: { visible: false } }),
+                    Bodies.rectangle(-25, height/2, 50, height, { isStatic: true, render: { visible: false } }),
+                    Bodies.rectangle(width + 25, height/2, 50, height, { isStatic: true, render: { visible: false } })
                 ];
 
                 World.add(world, [ball, goal, ...mazeWalls, ...boundaries]);
             }
 
+            // --- Control Handlers ---
             const keyState = {};
             document.addEventListener('keydown', (e) => keyState[e.key] = true);
             document.addEventListener('keyup', (e) => keyState[e.key] = false);
 
             function handleKeyboardControls() {
                 if (sensorActive) return;
-
                 const step = 0.05;
                 if (keyState['ArrowLeft']) engine.world.gravity.x = Math.max(-1, engine.world.gravity.x - step);
                 if (keyState['ArrowRight']) engine.world.gravity.x = Math.min(1, engine.world.gravity.x + step);
                 if (keyState['ArrowUp']) engine.world.gravity.y = Math.max(-1, engine.world.gravity.y - step);
                 if (keyState['ArrowDown']) engine.world.gravity.y = Math.min(1, engine.world.gravity.y + step);
             }
-
+            
             function enableSensorControls() {
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                     DeviceOrientationEvent.requestPermission()
-                        .then(response => {
-                            if (response === 'granted') {
-                                window.addEventListener('deviceorientation', handleDeviceTilt);
-                            }
-                        })
-                        .catch(error => {
-                            window.addEventListener('deviceorientation', handleDeviceTilt);
-                        });
+                        .then(response => { if (response === 'granted') window.addEventListener('deviceorientation', handleDeviceTilt); })
+                        .catch(console.error);
                 } else {
                     window.addEventListener('deviceorientation', handleDeviceTilt);
                 }
             }
             
-            // CHANGED: This function now uses both Beta and Gamma for 2D gravity control.
             function handleDeviceTilt(event) {
                 const { beta, gamma } = event;
                 if (beta === null || gamma === null) return;
-
-                if (!isCalibrated) {
-                    // This is the first tilt event we've received.
-                    // We'll store this orientation as the "resting" or "zero gravity" position.
-                    initialTilt.beta = beta;
-                    initialTilt.gamma = gamma;
-                    isCalibrated = true;
-                }
-                
                 if (!sensorActive) sensorActive = true;
 
-                // Store the raw tilt data for the debug panel
-                tiltData.beta = beta;
-                tiltData.gamma = gamma;
-
-                // --- HORIZONTAL GRAVITY (X-AXIS) ---
-                // Calculate the left/right tilt relative to the initial resting position
-                const relativeGamma = gamma - initialTilt.gamma;
+                const angle = Math.atan2(gamma, beta);
+                engine.world.gravity.x = Math.sin(angle);
+                engine.world.gravity.y = Math.cos(angle);
                 
-                // Apply a dead zone. Only change gravity if tilt exceeds the threshold.
-                if (Math.abs(relativeGamma) > TILT_THRESHOLD) {
-                    // Calculate the effective tilt, subtracting the dead zone to avoid a jump in movement
-                    const effectiveGamma = Math.sign(relativeGamma) * (Math.abs(relativeGamma) - TILT_THRESHOLD);
-                    // Clamp the value and map it to the gravity scale
-                    const clampedGamma = Math.max(-90, Math.min(90, effectiveGamma));
-                    engine.world.gravity.x = clampedGamma / (90 - TILT_THRESHOLD);
-                } else {
-                    // If we are inside the dead zone, there's no horizontal gravity.
-                    engine.world.gravity.x = 0;
-                }
-
-                // --- VERTICAL GRAVITY (Y-AXIS) ---
-                // Calculate the front/back tilt relative to the initial resting position
-                const relativeBeta = beta - initialTilt.beta;
-
-                // Apply a dead zone for vertical tilt.
-                if (Math.abs(relativeBeta) > TILT_THRESHOLD) {
-                    const effectiveBeta = Math.sign(relativeBeta) * (Math.abs(relativeBeta) - TILT_THRESHOLD);
-                    const clampedBeta = Math.max(-90, Math.min(90, effectiveBeta));
-                    engine.world.gravity.y = clampedBeta / (90 - TILT_THRESHOLD);
-                } else {
-                    // If inside the dead zone, there's no vertical gravity. The ball will float.
-                    engine.world.gravity.y = 0;
-                }
+                tiltData = { beta, gamma };
             }
-            
+
             function updateDebugDisplay() {
-                if (betaDisplay) betaDisplay.textContent = sensorActive && tiltData.beta !== null ? `${Math.round(tiltData.beta)}°` : 'N/A';
-                if (gammaDisplay) gammaDisplay.textContent = sensorActive && tiltData.gamma !== null ? `${Math.round(tiltData.gamma)}°` : 'N/A';
-                if (gravityXDisplay) gravityXDisplay.textContent = engine.world.gravity.x.toFixed(2);
-                if (gravityYDisplay) gravityYDisplay.textContent = engine.world.gravity.y.toFixed(2);
-                if (speedDisplay && ball) speedDisplay.textContent = Math.sqrt(ball.velocity.x ** 2 + ball.velocity.y ** 2).toFixed(1);
-                if (sensorStatus) sensorStatus.textContent = sensorActive ? '✅' : '⌨️';
+                betaDisplay.textContent = sensorActive ? `${Math.round(tiltData.beta)}°` : 'N/A';
+                gammaDisplay.textContent = sensorActive ? `${Math.round(tiltData.gamma)}°` : 'N/A';
+                gravityXDisplay.textContent = engine.world.gravity.x.toFixed(2);
+                gravityYDisplay.textContent = engine.world.gravity.y.toFixed(2);
+                sensorStatus.textContent = sensorActive ? '✅ Tilt' : '⌨️ Keyboard';
             }
 
-            function createParticle(x, y) {
-                return { x, y, vx: (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.5) * 1.5, life: 1.0, decay: 0.04, size: 1 + Math.random() * 2, color: `hsl(${Math.random() * 60 + 300}, 80%, 70%)` };
-            }
-
+            // --- Game Loop and Rendering ---
             Events.on(engine, 'beforeUpdate', () => {
                 handleKeyboardControls();
                 updateDebugDisplay();
             });
             
             Events.on(engine, 'afterUpdate', () => {
-                if (ball && Math.random() < 0.5) {
-                    particles.push(createParticle(ball.position.x, ball.position.y));
+                if (!ball) return;
+                ballHistory.unshift({ x: ball.position.x, y: ball.position.y });
+                if (ballHistory.length > historyLength) ballHistory.pop();
+            });
+            
+            Events.on(render, 'afterRender', () => {
+                const ctx = render.canvas.getContext('2d');
+                if (ballHistory.length < 2 || !ball) return;
+                
+                ctx.save();
+                ctx.strokeStyle = ball.render.fillStyle;
+                ctx.lineWidth = ball.circleRadius * 1.5;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+                ctx.shadowColor = ball.render.fillStyle;
+                ctx.shadowBlur = 20;
+
+                for (let i = 0; i < ballHistory.length - 1; i++) {
+                    ctx.globalAlpha = 1 - (i / historyLength);
+                    ctx.beginPath();
+                    ctx.moveTo(ballHistory[i].x, ballHistory[i].y);
+                    ctx.lineTo(ballHistory[i+1].x, ballHistory[i+1].y);
+                    ctx.stroke();
                 }
-                for (let i = particles.length - 1; i >= 0; i--) {
-                    const p = particles[i];
-                    p.x += p.vx; p.y += p.vy; p.life -= p.decay;
-                    if (p.life <= 0) particles.splice(i, 1);
-                }
+                ctx.restore();
             });
 
+            // --- Win Condition ---
             Events.on(engine, 'collisionStart', (event) => {
                 for (const pair of event.pairs) {
                     if ((pair.bodyA === ball && pair.bodyB === goal) || (pair.bodyA === goal && pair.bodyB === ball)) {
@@ -549,47 +355,21 @@
                 }
             });
 
-            Events.on(render, 'afterRender', () => {
-                const ctx = render.canvas.getContext('2d');
-                
-                ctx.save();
-                ctx.fillStyle = 'white';
-                wallGeometries.forEach(geom => {
-                    ctx.save();
-                    ctx.translate(geom.x, geom.y);
-                    ctx.rotate(geom.angle);
-                    ctx.fillRect(-geom.w / 2, -geom.h / 2, geom.w, geom.h);
-                    ctx.restore();
-                });
-                ctx.restore();
-
-                particles.forEach(p => {
-                    ctx.save();
-                    ctx.globalAlpha = p.life * 0.8;
-                    ctx.fillStyle = p.color;
-                    ctx.beginPath();
-                    ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.restore();
-                });
-            });
-
-            playAgainBtn.addEventListener('click', () => {
-                winModal.style.display = 'none';
-                // CHANGED: Reset calibration for the new game
-                isCalibrated = false;
-                initialTilt = { beta: null, gamma: null };
-                setup();
-                Runner.run(runner, engine);
-            });
-
+            // --- UI Event Listeners ---
             permissionBtn.addEventListener('click', () => {
                 enableSensorControls();
                 permissionModal.style.display = 'none';
             });
+            
+            playAgainBtn.addEventListener('click', () => {
+                winModal.style.display = 'none';
+                setup();
+                Runner.run(runner, engine);
+            });
 
             window.addEventListener('resize', setup);
 
+            // Initialize
             setup();
             Render.run(render);
             Runner.run(runner, engine);
