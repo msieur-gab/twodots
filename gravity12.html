@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mobile Physics Ball Game</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: #000000;
+            overflow: hidden;
+            touch-action: none;
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameCanvas {
+            display: block;
+            background: #000000;
+            border: 2px solid #333333;
+            border-radius: 10px;
+            margin: 10px;
+        }
+        
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 14px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 8px;
+            z-index: 100;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 10px;
+            max-width: 300px;
+        }
+        
+        .permission-btn {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .permission-btn:hover {
+            background: #45a049;
+        }
+        
+        #permissionModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .modal-content {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            text-align: center;
+            max-width: 350px;
+            margin: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="permissionModal">
+        <div class="modal-content">
+            <h2>Enable Device Motion</h2>
+            <p>This game uses your device's orientation to control the ball. Please allow motion access to play.</p>
+            <button class="permission-btn" onclick="requestPermission()">Enable Motion</button>
+        </div>
+    </div>
+    
+    <div id="info">
+        <div>Orientation: <span id="orientation">Unknown</span></div>
+        <div>Tilt: <span id="tilt">0°, 0°</span></div>
+        <div>Ball Velocity: <span id="velocity">0</span></div>
+    </div>
+    
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="instructions">
+        <strong>How to Play:</strong><br>
+        Tilt your device to move the ball around<br>
+        Rotate to change gravity direction
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script>
+        // Game variables
+        let engine, world, ball, walls = [], canvas, ctx;
+        let deviceOrientation = { alpha: 0, beta: 0, gamma: 0 };
+        let currentGravity = { x: 0, y: 1 };
+        let permissionGranted = false;
+        let trail = []; // Array to store ball trail positions
+        const maxTrailLength = 15; // Maximum number of trail points
+        
+        // Canvas setup
+        function setupCanvas() {
+            canvas = document.getElementById('gameCanvas');
+            ctx = canvas.getContext('2d');
+            
+            // Set canvas size to fill screen minus margins
+            const margin = 20;
+            canvas.width = window.innerWidth - margin;
+            canvas.height = window.innerHeight - margin;
+            
+            // Adjust for info panel
+            canvas.style.marginTop = '80px';
+            canvas.height = window.innerHeight - 180;
+        }
+        
+        // Matter.js setup
+        function setupPhysics() {
+            // Create engine
+            engine = Matter.Engine.create();
+            world = engine.world;
+            
+            // Disable default gravity (we'll control it with device orientation)
+            engine.world.gravity.y = 0;
+            engine.world.gravity.x = 0;
+            
+            // Create ball
+            ball = Matter.Bodies.circle(canvas.width / 2, canvas.height / 2, 20, {
+                restitution: 0.8, // Bounciness
+                friction: 0.1,
+                frictionAir: 0.01
+            });
+            
+            // Create walls
+            const wallThickness = 10;
+            walls = [
+                // Top wall
+                Matter.Bodies.rectangle(canvas.width / 2, -wallThickness / 2, canvas.width, wallThickness, { isStatic: true }),
+                // Bottom wall
+                Matter.Bodies.rectangle(canvas.width / 2, canvas.height + wallThickness / 2, canvas.width, wallThickness, { isStatic: true }),
+                // Left wall
+                Matter.Bodies.rectangle(-wallThickness / 2, canvas.height / 2, wallThickness, canvas.height, { isStatic: true }),
+                // Right wall
+                Matter.Bodies.rectangle(canvas.width + wallThickness / 2, canvas.height / 2, wallThickness, canvas.height, { isStatic: true })
+            ];
+            
+            // Add all bodies to world
+            Matter.World.add(world, [ball, ...walls]);
+        }
+        
+        // Device orientation handler
+        function handleOrientation(event) {
+            if (!permissionGranted) return;
+            
+            // Store orientation data
+            deviceOrientation.alpha = event.alpha || 0; // Z-axis rotation
+            deviceOrientation.beta = event.beta || 0;   // X-axis rotation
+            deviceOrientation.gamma = event.gamma || 0; // Y-axis rotation
+            
+            // Determine device orientation
+            let orientation = 'portrait';
+            if (Math.abs(window.orientation) === 90) {
+                orientation = window.orientation === 90 ? 'landscape-left' : 'landscape-right';
+            } else if (window.orientation === 180) {
+                orientation = 'portrait-upside-down';
+            }
+            
+            // Calculate gravity based on orientation and tilt
+            let gravityX = 0, gravityY = 0;
+            const sensitivity = 0.02;
+            
+            switch(orientation) {
+                case 'portrait':
+                    gravityX = deviceOrientation.gamma * sensitivity;
+                    gravityY = (deviceOrientation.beta - 90) * sensitivity;
+                    break;
+                case 'landscape-left':
+                    gravityX = (deviceOrientation.beta - 90) * sensitivity;
+                    gravityY = -deviceOrientation.gamma * sensitivity;
+                    break;
+                case 'landscape-right':
+                    gravityX = -(deviceOrientation.beta - 90) * sensitivity;
+                    gravityY = deviceOrientation.gamma * sensitivity;
+                    break;
+                case 'portrait-upside-down':
+                    gravityX = -deviceOrientation.gamma * sensitivity;
+                    gravityY = -(deviceOrientation.beta - 90) * sensitivity;
+                    break;
+            }
+            
+            // Clamp gravity values
+            gravityX = Math.max(-2, Math.min(2, gravityX));
+            gravityY = Math.max(-2, Math.min(2, gravityY));
+            
+            // Apply gravity
+            engine.world.gravity.x = gravityX;
+            engine.world.gravity.y = gravityY;
+            
+            // Update UI
+            document.getElementById('orientation').textContent = orientation;
+            document.getElementById('tilt').textContent = 
+                `${Math.round(deviceOrientation.gamma)}°, ${Math.round(deviceOrientation.beta)}°`;
+            
+            const velocity = Math.sqrt(ball.velocity.x ** 2 + ball.velocity.y ** 2);
+            document.getElementById('velocity').textContent = Math.round(velocity * 10) / 10;
+        }
+        
+        // Render function
+        function render() {
+            // Clear canvas with black background
+            ctx.fillStyle = '#000000';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Update trail with current ball position
+            trail.push({
+                x: ball.position.x,
+                y: ball.position.y,
+                time: Date.now()
+            });
+            
+            // Remove old trail points
+            if (trail.length > maxTrailLength) {
+                trail.shift();
+            }
+            
+            // Draw trail
+            for (let i = 0; i < trail.length; i++) {
+                const point = trail[i];
+                const alpha = (i + 1) / trail.length; // Fade from 0 to 1
+                const size = (alpha * 15) + 3; // Trail gets bigger towards ball
+                
+                // Create gradient for trail point
+                const gradient = ctx.createRadialGradient(
+                    point.x, point.y, 0,
+                    point.x, point.y, size
+                );
+                gradient.addColorStop(0, `rgba(255, 50, 50, ${alpha * 0.8})`);
+                gradient.addColorStop(0.7, `rgba(255, 100, 100, ${alpha * 0.4})`);
+                gradient.addColorStop(1, `rgba(255, 50, 50, 0)`);
+                
+                ctx.beginPath();
+                ctx.arc(point.x, point.y, size, 0, 2 * Math.PI);
+                ctx.fillStyle = gradient;
+                ctx.fill();
+            }
+            
+            // Draw glowing red ball
+            const ballRadius = 20;
+            
+            // Outer glow
+            const outerGlow = ctx.createRadialGradient(
+                ball.position.x, ball.position.y, 0,
+                ball.position.x, ball.position.y, ballRadius * 2
+            );
+            outerGlow.addColorStop(0, 'rgba(255, 50, 50, 0.8)');
+            outerGlow.addColorStop(0.3, 'rgba(255, 100, 100, 0.6)');
+            outerGlow.addColorStop(0.6, 'rgba(255, 150, 150, 0.3)');
+            outerGlow.addColorStop(1, 'rgba(255, 50, 50, 0)');
+            
+            ctx.beginPath();
+            ctx.arc(ball.position.x, ball.position.y, ballRadius * 2, 0, 2 * Math.PI);
+            ctx.fillStyle = outerGlow;
+            ctx.fill();
+            
+            // Main ball
+            const ballGradient = ctx.createRadialGradient(
+                ball.position.x - 6, ball.position.y - 6, 0,
+                ball.position.x, ball.position.y, ballRadius
+            );
+            ballGradient.addColorStop(0, '#ff8888');
+            ballGradient.addColorStop(0.4, '#ff4444');
+            ballGradient.addColorStop(0.8, '#cc0000');
+            ballGradient.addColorStop(1, '#880000');
+            
+            ctx.beginPath();
+            ctx.arc(ball.position.x, ball.position.y, ballRadius, 0, 2 * Math.PI);
+            ctx.fillStyle = ballGradient;
+            ctx.fill();
+            
+            // Inner highlight
+            ctx.beginPath();
+            ctx.arc(ball.position.x - 6, ball.position.y - 6, 8, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255, 200, 200, 0.8)';
+            ctx.fill();
+            
+            // Core glow
+            ctx.beginPath();
+            ctx.arc(ball.position.x, ball.position.y, ballRadius * 0.6, 0, 2 * Math.PI);
+            ctx.fillStyle = 'rgba(255, 100, 100, 0.4)';
+            ctx.fill();
+            
+            // Draw subtle boundary lines
+            ctx.strokeStyle = 'rgba(100, 100, 100, 0.3)';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(1, 1, canvas.width - 2, canvas.height - 2);
+        }
+        
+        // Game loop
+        function gameLoop() {
+            Matter.Engine.update(engine);
+            render();
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // Request permission for device motion
+        async function requestPermission() {
+            try {
+                if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    // iOS 13+ permission request
+                    const permission = await DeviceOrientationEvent.requestPermission();
+                    if (permission === 'granted') {
+                        permissionGranted = true;
+                        startGame();
+                    } else {
+                        alert('Permission denied. Game requires device orientation access.');
+                    }
+                } else {
+                    // Other devices
+                    permissionGranted = true;
+                    startGame();
+                }
+            } catch (error) {
+                console.error('Error requesting permission:', error);
+                permissionGranted = true;
+                startGame();
+            }
+        }
+        
+        // Start game
+        function startGame() {
+            document.getElementById('permissionModal').style.display = 'none';
+            
+            // Add event listeners
+            window.addEventListener('deviceorientation', handleOrientation);
+            window.addEventListener('resize', () => {
+                setupCanvas();
+                setupPhysics();
+            });
+            
+            // Start game loop
+            gameLoop();
+        }
+        
+        // Initialize
+        window.addEventListener('load', () => {
+            setupCanvas();
+            setupPhysics();
+            
+            // Check if device supports orientation
+            if (!window.DeviceOrientationEvent) {
+                document.getElementById('permissionModal').innerHTML = `
+                    <div class="modal-content">
+                        <h2>Device Not Supported</h2>
+                        <p>This device doesn't support motion sensors. You can still see the ball, but tilt controls won't work.</p>
+                        <button class="permission-btn" onclick="startGame()">Continue Anyway</button>
+                    </div>
+                `;
+            }
+        });
+        
+        // Add some test gravity for desktop testing
+        document.addEventListener('keydown', (e) => {
+            if (!permissionGranted) return;
+            
+            const force = 0.01;
+            switch(e.key) {
+                case 'ArrowLeft':
+                    engine.world.gravity.x = -1;
+                    break;
+                case 'ArrowRight':
+                    engine.world.gravity.x = 1;
+                    break;
+                case 'ArrowUp':
+                    engine.world.gravity.y = -1;
+                    break;
+                case 'ArrowDown':
+                    engine.world.gravity.y = 1;
+                    break;
+                case ' ':
+                    engine.world.gravity.x = 0;
+                    engine.world.gravity.y = 0;
+                    break;
+            }
+        });
+        
+        // Reset ball position on tap/click
+        canvas.addEventListener('click', () => {
+            Matter.Body.setPosition(ball, { x: canvas.width / 2, y: canvas.height / 2 });
+            Matter.Body.setVelocity(ball, { x: 0, y: 0 });
+            trail = []; // Clear the trail
+        });
+    </script>
+</body>
+</html>
