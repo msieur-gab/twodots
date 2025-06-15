@@ -127,7 +127,7 @@
     <div id="permission-modal" class="modal">
         <div class="modal-content">
             <h2>🧭 Gravity Maze Game</h2>
-            <p>Control the direction of gravity by rotating your device.</p>
+            <p>Tilt your device to guide the ball.</p>
             <button id="permission-btn">🚀 Start Game</button>
         </div>
     </div>
@@ -278,11 +278,22 @@
                 if (keyState['ArrowDown']) engine.world.gravity.y = Math.min(1, engine.world.gravity.y + step);
             }
             
-            function enableSensorControls() {
+            async function enableSensorControls() {
+                // **FIX:** Lock the screen orientation to portrait mode
+                try {
+                    if (screen.orientation && screen.orientation.lock) {
+                        await screen.orientation.lock('portrait-primary');
+                        console.log('Screen orientation locked to portrait.');
+                    }
+                } catch (err) {
+                    console.error('Screen orientation lock failed:', err);
+                }
+
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(response => { if (response === 'granted') window.addEventListener('deviceorientation', handleDeviceTilt); })
-                        .catch(console.error);
+                    const response = await DeviceOrientationEvent.requestPermission();
+                    if (response === 'granted') {
+                        window.addEventListener('deviceorientation', handleDeviceTilt);
+                    }
                 } else {
                     window.addEventListener('deviceorientation', handleDeviceTilt);
                 }
@@ -387,4 +398,4 @@
         });
     </script>
 </body>
-</html>
+</ht
