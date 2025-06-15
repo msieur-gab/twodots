@@ -87,6 +87,7 @@
             <button id="fullscreenBtn">Fullscreen</button>
             <button id="resetBtn">Reset Ball</button>
             <button id="testBtn">Test Ball</button>
+            <button id="gravityBtn">Test Gravity</button>
         </div>
         
         <div id="status">
@@ -227,6 +228,18 @@
                         Matter.Body.applyForce(this.ball, this.ball.position, {x: 0.01, y: 0.01});
                         console.log('Applied test force to ball');
                     }
+                });
+                
+                // Gravity test button - simulate device tilt
+                document.getElementById('gravityBtn').addEventListener('click', () => {
+                    this.engine.world.gravity.x = 0.5;
+                    this.engine.world.gravity.y = 0.5;
+                    console.log('Applied test gravity');
+                    setTimeout(() => {
+                        this.engine.world.gravity.x = 0;
+                        this.engine.world.gravity.y = 0;
+                        console.log('Reset gravity');
+                    }, 2000);
                 });
             }
             
