@@ -29,7 +29,7 @@
         }
 
         #gameCanvas {
-            border: 2px solid #333;
+            border: 3px solid #fff;
             background: #000;
         }
 
@@ -55,26 +55,27 @@
             background: #555;
         }
 
-        button:active {
-            background: #777;
-        }
-
         #info {
             position: absolute;
             bottom: 10px;
             left: 10px;
             font-size: 12px;
-            color: #666;
-            background: rgba(0,0,0,0.7);
-            padding: 5px;
-            border-radius: 3px;
+            color: #fff;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #333;
         }
 
-        .trail {
+        #status {
             position: absolute;
-            pointer-events: none;
-            border-radius: 50%;
-            background: radial-gradient(circle, rgba(255, 0, 0, 0.6) 0%, rgba(255, 100, 100, 0.3) 50%, transparent 100%);
+            top: 10px;
+            right: 10px;
+            color: #0f0;
+            font-size: 14px;
+            background: rgba(0,0,0,0.8);
+            padding: 10px;
+            border-radius: 5px;
         }
     </style>
 </head>
@@ -85,109 +86,133 @@
         <div id="controls">
             <button id="fullscreenBtn">Fullscreen</button>
             <button id="resetBtn">Reset Ball</button>
+            <button id="testBtn">Test Ball</button>
+        </div>
+        
+        <div id="status">
+            Loading...
         </div>
         
         <div id="info">
             <div>Tilt your device to control the ball</div>
-            <div id="orientation">Orientation: Not detected</div>
-            <div id="ballPos">Ball: Loading...</div>
+            <div id="orientation">Orientation: Waiting...</div>
+            <div id="ballPos">Ball: Not created</div>
+            <div id="gravity">Gravity: 0, 0</div>
         </div>
     </div>
 
-    <!-- Load libraries from CDN -->
+    <!-- Load Matter.js from CDN -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/screenfull.js/5.2.0/screenfull.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/gyronorm@2.0.6/dist/gyronorm.complete.min.js">
 
     <script>
-        class MobileBallGame {
+        class SimpleBallGame {
             constructor() {
                 this.canvas = document.getElementById('gameCanvas');
                 this.ctx = this.canvas.getContext('2d');
+                this.status = document.getElementById('status');
                 this.orientationInfo = document.getElementById('orientation');
                 this.ballPosInfo = document.getElementById('ballPos');
+                this.gravityInfo = document.getElementById('gravity');
                 
-                // Game dimensions
-                this.gameSize = Math.min(window.innerWidth - 40, window.innerHeight - 100, 400);
+                // Set canvas size - ensure it's always positive
+                const maxWidth = window.innerWidth - 60;
+                const maxHeight = window.innerHeight - 120;
+                this.gameSize = Math.max(200, Math.min(maxWidth, maxHeight, 350));
+                
+                // Ensure minimum size
+                if (this.gameSize < 200) {
+                    this.gameSize = 200;
+                }
+                
                 this.canvas.width = this.gameSize;
                 this.canvas.height = this.gameSize;
                 
-                console.log('Canvas size:', this.gameSize);
+                this.status.textContent = `Canvas ready: ${this.gameSize}x${this.gameSize}`;
                 
-                // Physics world
-                this.engine = Matter.Engine.create();
-                this.world = this.engine.world;
-                this.engine.world.gravity.x = 0;
-                this.engine.world.gravity.y = 0;
+                // Initialize physics
+                this.initPhysics();
                 
-                // Ball trail
-                this.trail = [];
-                this.maxTrailLength = 8;
-                
-                this.init();
+                // Setup controls
                 this.setupControls();
-                this.startOrientationTracking();
+                
+                // Start orientation tracking
+                this.setupOrientation();
+                
+                // Start game loop
                 this.gameLoop();
+                
+                this.status.textContent = 'Game started!';
+                
+                console.log('Game initialized with canvas size:', this.gameSize);
             }
             
-            init() {
-                // Create boundaries
-                const wallThickness = 20;
+            initPhysics() {
+                // Create Matter.js engine
+                this.engine = Matter.Engine.create();
+                this.world = this.engine.world;
+                
+                // Disable default gravity
+                this.engine.world.gravity.y = 0;
+                this.engine.world.gravity.x = 0;
+                
+                // Create walls
+                const wallThickness = 50;
                 const walls = [
-                    // Top wall
-                    Matter.Bodies.rectangle(this.gameSize / 2, -wallThickness / 2, this.gameSize, wallThickness, { 
-                        isStatic: true,
-                        render: { fillStyle: '#333' }
-                    }),
-                    // Bottom wall
-                    Matter.Bodies.rectangle(this.gameSize / 2, this.gameSize + wallThickness / 2, this.gameSize, wallThickness, { 
-                        isStatic: true,
-                        render: { fillStyle: '#333' }
-                    }),
-                    // Left wall
-                    Matter.Bodies.rectangle(-wallThickness / 2, this.gameSize / 2, wallThickness, this.gameSize, { 
-                        isStatic: true,
-                        render: { fillStyle: '#333' }
-                    }),
-                    // Right wall
-                    Matter.Bodies.rectangle(this.gameSize + wallThickness / 2, this.gameSize / 2, wallThickness, this.gameSize, { 
-                        isStatic: true,
-                        render: { fillStyle: '#333' }
-                    })
+                    // Top
+                    Matter.Bodies.rectangle(this.gameSize/2, -wallThickness/2, this.gameSize + wallThickness, wallThickness, { isStatic: true }),
+                    // Bottom  
+                    Matter.Bodies.rectangle(this.gameSize/2, this.gameSize + wallThickness/2, this.gameSize + wallThickness, wallThickness, { isStatic: true }),
+                    // Left
+                    Matter.Bodies.rectangle(-wallThickness/2, this.gameSize/2, wallThickness, this.gameSize + wallThickness, { isStatic: true }),
+                    // Right
+                    Matter.Bodies.rectangle(this.gameSize + wallThickness/2, this.gameSize/2, wallThickness, this.gameSize + wallThickness, { isStatic: true })
                 ];
                 
                 Matter.World.add(this.world, walls);
                 
                 // Create ball
                 this.createBall();
+                
+                console.log('Physics initialized');
             }
             
             createBall() {
+                // Remove existing ball
                 if (this.ball) {
                     Matter.World.remove(this.world, this.ball);
                 }
                 
-                const ballX = this.gameSize / 2;
-                const ballY = this.gameSize / 2;
+                // Calculate center position (ensure it's positive and within canvas)
+                const centerX = Math.max(50, this.gameSize / 2);
+                const centerY = Math.max(50, this.gameSize / 2);
                 
-                this.ball = Matter.Bodies.circle(ballX, ballY, 20, {
-                    restitution: 0.8,
+                // Create new ball in center
+                this.ball = Matter.Bodies.circle(centerX, centerY, 25, {
+                    restitution: 0.7,
                     friction: 0.1,
-                    frictionAir: 0.01,
-                    render: { fillStyle: '#ff0000' }
+                    frictionAir: 0.02
                 });
                 
                 Matter.World.add(this.world, this.ball);
+                
+                // Initialize trail
                 this.trail = [];
                 
-                console.log('Ball created at:', ballX, ballY, 'Canvas size:', this.gameSize);
+                console.log('Ball created at:', centerX, centerY, 'Canvas size:', this.gameSize);
+                console.log('Ball position after creation:', this.ball.position.x, this.ball.position.y);
             }
             
             setupControls() {
                 // Fullscreen button
                 document.getElementById('fullscreenBtn').addEventListener('click', () => {
-                    if (screenfull && screenfull.isEnabled) {
-                        screenfull.toggle();
+                    try {
+                        if (document.fullscreenElement) {
+                            document.exitFullscreen();
+                        } else {
+                            document.documentElement.requestFullscreen();
+                        }
+                    } catch (e) {
+                        console.log('Fullscreen not supported:', e);
                     }
                 });
                 
@@ -196,109 +221,74 @@
                     this.createBall();
                 });
                 
-                // Handle orientation change
-                window.addEventListener('orientationchange', () => {
-                    setTimeout(() => {
-                        this.handleResize();
-                    }, 500);
-                });
-                
-                window.addEventListener('resize', () => {
-                    this.handleResize();
+                // Test button - add some force to see if ball moves
+                document.getElementById('testBtn').addEventListener('click', () => {
+                    if (this.ball) {
+                        Matter.Body.applyForce(this.ball, this.ball.position, {x: 0.01, y: 0.01});
+                        console.log('Applied test force to ball');
+                    }
                 });
             }
             
-            handleResize() {
-                const newSize = Math.min(window.innerWidth - 40, window.innerHeight - 100, 400);
-                if (newSize !== this.gameSize) {
-                    this.gameSize = newSize;
-                    this.canvas.width = this.gameSize;
-                    this.canvas.height = this.gameSize;
-                    this.init();
-                }
-            }
-            
-            startOrientationTracking() {
-                // Check if device supports orientation
+            setupOrientation() {
+                // Check for device orientation support
                 if (typeof DeviceOrientationEvent === 'undefined') {
                     this.orientationInfo.textContent = 'Device orientation not supported';
                     return;
                 }
                 
                 // Request permission for iOS 13+
+                const requestPermission = () => {
+                    if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                        DeviceOrientationEvent.requestPermission()
+                            .then(response => {
+                                if (response === 'granted') {
+                                    this.startOrientationTracking();
+                                } else {
+                                    this.orientationInfo.textContent = 'Permission denied';
+                                }
+                            })
+                            .catch(console.error);
+                    } else {
+                        this.startOrientationTracking();
+                    }
+                };
+                
+                // Start tracking immediately or on user interaction
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
-                    DeviceOrientationEvent.requestPermission()
-                        .then(response => {
-                            if (response === 'granted') {
-                                this.initOrientation();
-                            } else {
-                                this.orientationInfo.textContent = 'Permission denied for orientation';
-                            }
-                        })
-                        .catch(console.error);
+                    document.addEventListener('click', requestPermission, { once: true });
                 } else {
-                    this.initOrientation();
+                    this.startOrientationTracking();
                 }
             }
             
-            initOrientation() {
-                // Try to use GyroNorm if available
-                if (typeof GyroNorm !== 'undefined') {
-                    this.gn = new GyroNorm();
-                    
-                    this.gn.init().then(() => {
-                        this.gn.start((data) => {
-                            this.handleGyroNormData(data);
-                        });
-                    }).catch((e) => {
-                        console.log('GyroNorm error:', e);
-                        this.fallbackOrientation();
-                    });
-                } else {
-                    this.fallbackOrientation();
-                }
-            }
-            
-            fallbackOrientation() {
-                // Fallback to regular device orientation
+            startOrientationTracking() {
                 window.addEventListener('deviceorientation', (event) => {
-                    this.handleDeviceOrientation(event);
+                    const beta = event.beta;   // front-to-back tilt (-180 to 180)
+                    const gamma = event.gamma; // left-to-right tilt (-90 to 90)
+                    
+                    if (beta !== null && gamma !== null) {
+                        // Convert tilt to gravity force
+                        const gravityStrength = 0.001;
+                        const gravityX = Math.sin(gamma * Math.PI / 180) * gravityStrength;
+                        const gravityY = Math.sin(beta * Math.PI / 180) * gravityStrength;
+                        
+                        // Apply gravity
+                        this.engine.world.gravity.x = gravityX;
+                        this.engine.world.gravity.y = gravityY;
+                        
+                        // Update display
+                        this.orientationInfo.textContent = `β: ${beta.toFixed(1)}° γ: ${gamma.toFixed(1)}°`;
+                        this.gravityInfo.textContent = `Gravity: ${gravityX.toFixed(4)}, ${gravityY.toFixed(4)}`;
+                    }
                 });
-            }
-            
-            handleGyroNormData(data) {
-                // GyroNorm provides do (device orientation) data
-                const beta = data.do.beta;   // front-to-back tilt (-180 to 180)
-                const gamma = data.do.gamma; // left-to-right tilt (-90 to 90)
                 
-                // Convert orientation to gravity
-                const gravityStrength = 0.0008;
-                const gravityX = Math.sin(gamma * Math.PI / 180) * gravityStrength;
-                const gravityY = Math.sin(beta * Math.PI / 180) * gravityStrength;
-                
-                this.engine.world.gravity.x = gravityX;
-                this.engine.world.gravity.y = gravityY;
-                
-                this.orientationInfo.textContent = `β: ${beta.toFixed(1)}° γ: ${gamma.toFixed(1)}° (GyroNorm)`;
-            }
-            
-            handleDeviceOrientation(event) {
-                const beta = event.beta;   // front-to-back tilt
-                const gamma = event.gamma; // left-to-right tilt
-                
-                if (beta !== null && gamma !== null) {
-                    const gravityStrength = 0.0008;
-                    const gravityX = Math.sin(gamma * Math.PI / 180) * gravityStrength;
-                    const gravityY = Math.sin(beta * Math.PI / 180) * gravityStrength;
-                    
-                    this.engine.world.gravity.x = gravityX;
-                    this.engine.world.gravity.y = gravityY;
-                    
-                    this.orientationInfo.textContent = `β: ${beta.toFixed(1)}° γ: ${gamma.toFixed(1)}° (Fallback)`;
-                }
+                console.log('Orientation tracking started');
             }
             
             updateTrail() {
+                if (!this.ball) return;
+                
                 // Add current position to trail
                 this.trail.push({
                     x: this.ball.position.x,
@@ -306,8 +296,8 @@
                     life: 1.0
                 });
                 
-                // Remove old trail points
-                if (this.trail.length > this.maxTrailLength) {
+                // Limit trail length
+                if (this.trail.length > 10) {
                     this.trail.shift();
                 }
                 
@@ -318,77 +308,43 @@
             }
             
             render() {
-                // Clear canvas with black background
+                // Clear canvas
                 this.ctx.fillStyle = '#000';
                 this.ctx.fillRect(0, 0, this.gameSize, this.gameSize);
                 
-                // Draw canvas border for debugging
-                this.ctx.strokeStyle = '#333';
-                this.ctx.lineWidth = 2;
-                this.ctx.strokeRect(1, 1, this.gameSize - 2, this.gameSize - 2);
-                
-                // Update ball position display
-                if (this.ball && this.ballPosInfo) {
-                    this.ballPosInfo.textContent = `Ball: (${Math.round(this.ball.position.x)}, ${Math.round(this.ball.position.y)})`;
-                }
-                
                 // Draw trail
-                this.trail.forEach((point, index) => {
-                    const alpha = point.life * 0.6;
-                    const size = point.life * 8 + 2;
+                this.trail.forEach((point) => {
+                    const alpha = point.life * 0.8;
+                    const size = point.life * 12 + 3;
                     
                     this.ctx.save();
                     this.ctx.globalAlpha = alpha;
-                    
-                    // Create glow effect
-                    const gradient = this.ctx.createRadialGradient(
-                        point.x, point.y, 0,
-                        point.x, point.y, size
-                    );
-                    gradient.addColorStop(0, '#ff6666');
-                    gradient.addColorStop(0.5, '#ff0000');
-                    gradient.addColorStop(1, 'transparent');
-                    
-                    this.ctx.fillStyle = gradient;
+                    this.ctx.fillStyle = '#ff4444';
                     this.ctx.beginPath();
                     this.ctx.arc(point.x, point.y, size, 0, Math.PI * 2);
                     this.ctx.fill();
-                    
                     this.ctx.restore();
                 });
                 
-                // Draw ball with bright red color and white outline
+                // Draw ball - BRIGHT AND VISIBLE
                 if (this.ball) {
-                    const ballX = this.ball.position.x;
-                    const ballY = this.ball.position.y;
+                    const x = this.ball.position.x;
+                    const y = this.ball.position.y;
                     
                     // White outline
                     this.ctx.fillStyle = '#ffffff';
                     this.ctx.beginPath();
-                    this.ctx.arc(ballX, ballY, 22, 0, Math.PI * 2);
+                    this.ctx.arc(x, y, 27, 0, Math.PI * 2);
                     this.ctx.fill();
                     
                     // Red ball
                     this.ctx.fillStyle = '#ff0000';
                     this.ctx.beginPath();
-                    this.ctx.arc(ballX, ballY, 20, 0, Math.PI * 2);
+                    this.ctx.arc(x, y, 25, 0, Math.PI * 2);
                     this.ctx.fill();
                     
-                    // Add glow to ball
-                    this.ctx.save();
-                    this.ctx.globalAlpha = 0.5;
-                    const ballGradient = this.ctx.createRadialGradient(
-                        ballX, ballY, 0,
-                        ballX, ballY, 30
-                    );
-                    ballGradient.addColorStop(0, '#ff6666');
-                    ballGradient.addColorStop(1, 'transparent');
-                    
-                    this.ctx.fillStyle = ballGradient;
-                    this.ctx.beginPath();
-                    this.ctx.arc(ballX, ballY, 30, 0, Math.PI * 2);
-                    this.ctx.fill();
-                    this.ctx.restore();
+                    // Update position display
+                    this.ballPosInfo.textContent = `Ball: (${Math.round(x)}, ${Math.round(y)})`;
                 }
             }
             
@@ -399,7 +355,7 @@
                 // Update trail
                 this.updateTrail();
                 
-                // Render
+                // Render everything
                 this.render();
                 
                 // Continue loop
@@ -407,19 +363,16 @@
             }
         }
         
-        // Start the game when page loads
+        // Start game when page loads
         window.addEventListener('load', () => {
-            new MobileBallGame();
-        });
-        
-        // Handle iOS permission request on user interaction for GyroNorm
-        document.addEventListener('click', function requestPermission() {
-            if (typeof DeviceOrientationEvent !== 'undefined' && 
-                typeof DeviceOrientationEvent.requestPermission === 'function') {
-                DeviceOrientationEvent.requestPermission();
+            try {
+                console.log('Starting game...');
+                new SimpleBallGame();
+            } catch (error) {
+                console.error('Game failed to start:', error);
+                document.getElementById('status').textContent = 'ERROR: ' + error.message;
             }
-            document.removeEventListener('click', requestPermission);
-        }, { once: true });
+        });
     </script>
 </body>
 </html>
