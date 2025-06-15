@@ -6,7 +6,7 @@
     <title>Gravity Maze Game</title>
     <!-- Physics Engine -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
-    <!-- **FIX:** Using gyronorm.js library for device orientation -->
+    <!-- Device Orientation Library -->
     <script src="https://cdn.jsdelivr.net/npm/gyronorm@2.0.6/dist/gyronorm.complete.min.js"></script>
     <!-- Fullscreen Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/screenfull.js/5.1.0/screenfull.min.js"></script>
@@ -284,7 +284,6 @@
             }
             
             function enableSensorControls() {
-                // **FIX:** Check if the library is loaded before using it.
                 if (typeof GyroNorm === 'undefined' || GyroNorm === null) {
                     console.error("GyroNorm library not loaded!");
                     sensorStatus.textContent = `❌ Lib Fail`;
@@ -320,8 +319,8 @@
                 tiltData = { beta, gamma };
 
                 // --- "STEERING WHEEL" LOGIC ---
-                // Determine if the device is held upside down.
-                const isUpsideDown = beta < 0;
+                // **FIX:** We only consider it upside down if it's tilted far enough.
+                const isUpsideDown = beta < -45;
 
                 // Normalize gamma from -90->90 to -1->1 for horizontal force.
                 let horizontalForce = Math.max(-90, Math.min(90, gamma)) / 90.0;
