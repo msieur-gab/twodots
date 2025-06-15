@@ -92,9 +92,9 @@
 <body>
     <div id="permissionModal">
         <div class="modal-content">
-            <h2>Enable Device Motion</h2>
-            <p>This game uses your device's orientation to control the ball. Please allow motion access to play.</p>
-            <button class="permission-btn" onclick="requestPermission()">Enable Motion</button>
+            <h2>Enable Device Motion & Rotation</h2>
+            <p>This game uses your device's orientation to control the ball and will unlock screen rotation for full 360° control.</p>
+            <button class="permission-btn" onclick="requestPermission()">Enable Motion & Rotation</button>
         </div>
     </div>
     
@@ -109,7 +109,8 @@
     <div id="instructions">
         <strong>How to Play:</strong><br>
         Tilt your device to move the ball around<br>
-        Rotate to change gravity direction
+        Rotate your device freely to reach all corners!<br>
+        <small>Tap screen to reset ball position</small>
     </div>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
@@ -180,34 +181,54 @@
             deviceOrientation.beta = event.beta || 0;   // X-axis rotation
             deviceOrientation.gamma = event.gamma || 0; // Y-axis rotation
             
-            // Determine device orientation
+            // Get screen orientation angle (more reliable than window.orientation)
+            let screenAngle = 0;
+            if (screen.orientation && screen.orientation.angle !== undefined) {
+                screenAngle = screen.orientation.angle;
+            } else if (window.orientation !== undefined) {
+                screenAngle = window.orientation;
+            }
+            
+            // Determine orientation based on screen angle
             let orientation = 'portrait';
-            if (Math.abs(window.orientation) === 90) {
-                orientation = window.orientation === 90 ? 'landscape-left' : 'landscape-right';
-            } else if (window.orientation === 180) {
-                orientation = 'portrait-upside-down';
+            switch(screenAngle) {
+                case 0:
+                    orientation = 'portrait';
+                    break;
+                case 90:
+                    orientation = 'landscape-left';
+                    break;
+                case -90:
+                case 270:
+                    orientation = 'landscape-right';
+                    break;
+                case 180:
+                    orientation = 'portrait-upside-down';
+                    break;
             }
             
             // Calculate gravity based on orientation and tilt
             let gravityX = 0, gravityY = 0;
-            const sensitivity = 0.02;
+            const sensitivity = 0.025; // Increased sensitivity for better control
             
-            switch(orientation) {
-                case 'portrait':
+            // Apply gravity based on screen orientation
+            switch(screenAngle) {
+                case 0: // Portrait
                     gravityX = deviceOrientation.gamma * sensitivity;
-                    gravityY = (deviceOrientation.beta - 90) * sensitivity;
+                    gravityY = deviceOrientation.beta * sensitivity;
                     break;
-                case 'landscape-left':
-                    gravityX = (deviceOrientation.beta - 90) * sensitivity;
+                case 90: // Landscape left
+                    gravityX = deviceOrientation.beta * sensitivity;
                     gravityY = -deviceOrientation.gamma * sensitivity;
                     break;
-                case 'landscape-right':
-                    gravityX = -(deviceOrientation.beta - 90) * sensitivity;
+                case -90:
+                case 270: // Landscape right
+                    gravityX = -deviceOrientation.beta * sensitivity;
                     gravityY = deviceOrientation.gamma * sensitivity;
                     break;
-                case 'portrait-upside-down':
+                case 180: // Portrait upside down
                     gravityX = -deviceOrientation.gamma * sensitivity;
-                    gravityY = -(deviceOrientation.beta - 90) * sensitivity;
+                    gravityY = -deviceOrientation.beta * sensitivity;
                     break;
             }
             
@@ -220,9 +241,9 @@
             engine.world.gravity.y = gravityY;
             
             // Update UI
-            document.getElementById('orientation').textContent = orientation;
+            document.getElementById('orientation').textContent = `${orientation} (${screenAngle}°)`;
             document.getElementById('tilt').textContent = 
-                `${Math.round(deviceOrientation.gamma)}°, ${Math.round(deviceOrientation.beta)}°`;
+                `γ:${Math.round(deviceOrientation.gamma)}° β:${Math.round(deviceOrientation.beta)}°`;
             
             const velocity = Math.sqrt(ball.velocity.x ** 2 + ball.velocity.y ** 2);
             document.getElementById('velocity').textContent = Math.round(velocity * 10) / 10;
@@ -325,9 +346,20 @@
             requestAnimationFrame(gameLoop);
         }
         
-        // Request permission for device motion
+        // Request permission for device motion and unlock orientation
         async function requestPermission() {
             try {
+                // First, try to unlock screen orientation
+                if (screen.orientation && screen.orientation.unlock) {
+                    try {
+                        await screen.orientation.unlock();
+                        console.log('Screen orientation unlocked');
+                    } catch (orientationError) {
+                        console.log('Could not unlock orientation:', orientationError);
+                        // Continue anyway
+                    }
+                }
+                
                 if (typeof DeviceOrientationEvent.requestPermission === 'function') {
                     // iOS 13+ permission request
                     const permission = await DeviceOrientationEvent.requestPermission();
@@ -355,6 +387,13 @@
             
             // Add event listeners
             window.addEventListener('deviceorientation', handleOrientation);
+            window.addEventListener('orientationchange', () => {
+                // Small delay to let orientation settle
+                setTimeout(() => {
+                    setupCanvas();
+                    setupPhysics();
+                }, 100);
+            });
             window.addEventListener('resize', () => {
                 setupCanvas();
                 setupPhysics();
