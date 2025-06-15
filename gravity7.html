@@ -234,7 +234,8 @@
 
             const engine = Engine.create();
             const world = engine.world;
-            world.gravity.y = 1;
+            // Gravity is now fully controlled by the device's tilt
+            world.gravity.y = 0;
             world.gravity.x = 0;
 
             const render = Render.create({
@@ -460,14 +461,14 @@
                 }
             }
             
-            // CHANGED: This function now includes calibration and a dead zone.
+            // CHANGED: This function now uses both Beta and Gamma for 2D gravity control.
             function handleDeviceTilt(event) {
                 const { beta, gamma } = event;
                 if (beta === null || gamma === null) return;
 
                 if (!isCalibrated) {
                     // This is the first tilt event we've received.
-                    // We'll store this orientation as the "resting" position.
+                    // We'll store this orientation as the "resting" or "zero gravity" position.
                     initialTilt.beta = beta;
                     initialTilt.gamma = gamma;
                     isCalibrated = true;
@@ -479,12 +480,13 @@
                 tiltData.beta = beta;
                 tiltData.gamma = gamma;
 
-                // Calculate the tilt relative to the initial resting position
+                // --- HORIZONTAL GRAVITY (X-AXIS) ---
+                // Calculate the left/right tilt relative to the initial resting position
                 const relativeGamma = gamma - initialTilt.gamma;
                 
                 // Apply a dead zone. Only change gravity if tilt exceeds the threshold.
                 if (Math.abs(relativeGamma) > TILT_THRESHOLD) {
-                    // Calculate the effective tilt, subtracting the dead zone
+                    // Calculate the effective tilt, subtracting the dead zone to avoid a jump in movement
                     const effectiveGamma = Math.sign(relativeGamma) * (Math.abs(relativeGamma) - TILT_THRESHOLD);
                     // Clamp the value and map it to the gravity scale
                     const clampedGamma = Math.max(-90, Math.min(90, effectiveGamma));
@@ -494,8 +496,19 @@
                     engine.world.gravity.x = 0;
                 }
 
-                // Vertical gravity remains constant for downward movement
-                engine.world.gravity.y = 1;
+                // --- VERTICAL GRAVITY (Y-AXIS) ---
+                // Calculate the front/back tilt relative to the initial resting position
+                const relativeBeta = beta - initialTilt.beta;
+
+                // Apply a dead zone for vertical tilt.
+                if (Math.abs(relativeBeta) > TILT_THRESHOLD) {
+                    const effectiveBeta = Math.sign(relativeBeta) * (Math.abs(relativeBeta) - TILT_THRESHOLD);
+                    const clampedBeta = Math.max(-90, Math.min(90, effectiveBeta));
+                    engine.world.gravity.y = clampedBeta / (90 - TILT_THRESHOLD);
+                } else {
+                    // If inside the dead zone, there's no vertical gravity. The ball will float.
+                    engine.world.gravity.y = 0;
+                }
             }
             
             function updateDebugDisplay() {
