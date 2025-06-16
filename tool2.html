@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Designer de Boîte 3D - Version Pro</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+        }
+        
+        .floating-panel {
+            backdrop-filter: blur(20px);
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-button {
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 1);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .preset-card {
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .preset-card:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .preset-card.selected {
+            ring: 2px;
+            ring-color: rgb(59 130 246);
+            background: rgb(239 246 255);
+        }
+        
+        .dimension-input {
+            transition: all 0.2s ease;
+        }
+        
+        .dimension-input:focus {
+            transform: scale(1.05);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .control-overlay {
+            position: fixed;
+            z-index: 40;
+            pointer-events: none;
+        }
+        
+        .control-overlay > * {
+            pointer-events: auto;
+        }
+        
+        .mini-control {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .mini-control:hover {
+            transform: scale(1.1);
+            background: rgba(255, 255, 255, 1);
+        }
+        
+        .range-modern {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 6px;
+            border-radius: 3px;
+            background: linear-gradient(to right, #3b82f6 0%, #3b82f6 50%, #e5e7eb 50%, #e5e7eb 100%);
+            outline: none;
+        }
+        
+        .range-modern::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+        
+        .range-modern::-moz-range-thumb {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: #3b82f6;
+            cursor: pointer;
+            border: 3px solid white;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+        }
+        
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 60;
+            padding: 16px 24px;
+            border-radius: 12px;
+            color: white;
+            font-weight: 600;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+        }
+        
+        .notification.show {
+            transform: translateX(0);
+        }
+        
+        .tab-button {
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .tab-button.active {
+            background: white;
+            color: #3b82f6;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: #3b82f6;
+            border-radius: 2px;
+        }
+
+        #main-content {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+        }
+        
+        #main-content.dragging {
+            cursor: grabbing;
+        }
+        
+        canvas {
+            display: block;
+            touch-action: none;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .mobile-panel {
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .mobile-panel.open {
+            transform: translateY(0);
+        }
+        
+        @media (max-width: 768px) {
+            .desktop-only {
+                display: none;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-only {
+                display: none;
+            }
+        }
+    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100">
+
+    <!-- Zone de visualisation 3D -->
+    <div id="main-content" class="absolute inset-0"></div>
+
+    <!-- Overlay de contrôles rapides -->
+    <div class="control-overlay top-4 right-4 space-y-3 desktop-only">
+        <div class="mini-control" id="reset-view" title="Réinitialiser la vue">
+            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+            </svg>
+        </div>
+        <div class="mini-control" id="save-config" title="Sauvegarder">
+            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path>
+            </svg>
+        </div>
+        <div class="mini-control" id="share-config" title="Partager">
+            <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.367 2.684 3 3 0 00-5.367-2.684z"></path>
+            </svg>
+        </div>
+    </div>
+
+    <!-- Panneau principal desktop -->
+    <div class="floating-panel fixed top-6 left-6 w-80 max-h-[calc(100vh-3rem)] overflow-hidden rounded-2xl desktop-only">
+        <div class="p-6">
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">Designer de Boîte 3D</h1>
+            <p class="text-gray-600 text-sm mb-6">Créez votre boîte personnalisée en quelques clics</p>
+            
+            <!-- Onglets -->
+            <div class="flex space-x-1 mb-6 bg-gray-100 p-1 rounded-lg">
+                <button class="tab-button flex-1 py-2 px-3 rounded-md text-sm font-medium active" data-tab="presets">
+                    Modèles
+                </button>
+                <button class="tab-button flex-1 py-2 px-3 rounded-md text-sm font-medium" data-tab="custom">
+                    Sur mesure
+                </button>
+                <button class="tab-button flex-1 py-2 px-3 rounded-md text-sm font-medium" data-tab="manual">
+                    Manuel
+                </button>
+            </div>
+            
+            <div class="overflow-y-auto max-h-96">
+                <!-- Contenu Modèles -->
+                <div class="tab-content active" id="presets-content">
+                    <div class="space-y-3">
+                        <div class="preset-card p-4 border border-gray-200 rounded-lg" data-dims="15,10,8">
+                            <h3 class="font-semibold text-gray-900">Boîte à bijoux</h3>
+                            <p class="text-sm text-gray-600">15 × 10 × 8 cm</p>
+                            <div class="text-xs text-purple-600 mt-1">Petite • Élégante</div>
+                        </div>
+                        <div class="preset-card p-4 border border-gray-200 rounded-lg" data-dims="22,8,5">
+                            <h3 class="font-semibold text-gray-900">Coffret à stylos</h3>
+                            <p class="text-sm text-gray-600">22 × 8 × 5 cm</p>
+                            <div class="text-xs text-red-600 mt-1">Rectangulaire • Pratique</div>
+                        </div>
+                        <div class="preset-card p-4 border border-gray-200 rounded-lg" data-dims="35,25,15">
+                            <h3 class="font-semibold text-gray-900">Boîte d'archive</h3>
+                            <p class="text-sm text-gray-600">35 × 25 × 15 cm</p>
+                            <div class="text-xs text-green-600 mt-1">Grande • Stockage</div>
+                        </div>
+                        <div class="preset-card p-4 border border-gray-200 rounded-lg" data-dims="20,20,10">
+                            <h3 class="font-semibold text-gray-900">Boîte carrée</h3>
+                            <p class="text-sm text-gray-600">20 × 20 × 10 cm</p>
+                            <div class="text-xs text-blue-600 mt-1">Carrée • Polyvalente</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Contenu Sur mesure -->
+                <div class="tab-content" id="custom-content">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Dimension de base</label>
+                            <div class="flex items-center space-x-3">
+                                <input type="number" id="base-value" value="26" min="1" class="dimension-input flex-1 p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <span class="text-gray-600 text-sm">cm</span>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Basé sur</label>
+                            <div class="flex space-x-4">
+                                <label class="flex items-center">
+                                    <input type="radio" name="base-dim" value="length" checked class="mr-2 text-blue-600">
+                                    <span class="text-sm">Longueur</span>
+                                </label>
+                                <label class="flex items-center">
+                                    <input type="radio" name="base-dim" value="width" class="mr-2 text-blue-600">
+                                    <span class="text-sm">Largeur</span>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Ratio de proportions</label>
+                            <div class="space-y-2">
+                                <button data-ratio="1.618" class="ratio-btn w-full p-3 text-left rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                                    <div class="font-medium text-gray-900">Ratio d'Or</div>
+                                    <div class="text-sm text-gray-600">1.618 • Harmonie classique</div>
+                                </button>
+                                <button data-ratio="2.0" class="ratio-btn w-full p-3 text-left rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                                    <div class="font-medium text-gray-900">Ratio 2:1</div>
+                                    <div class="text-sm text-gray-600">2.0 • Proportions simples</div>
+                                </button>
+                                <button data-ratio="1.414" class="ratio-btn w-full p-3 text-left rounded-lg border border-gray-200 hover:border-blue-300 transition-colors">
+                                    <div class="font-medium text-gray-900">Ratio Japonais</div>
+                                    <div class="text-sm text-gray-600">1.414 • Design zen</div>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Contenu Manuel -->
+                <div class="tab-content" id="manual-content">
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Longueur (cm)</label>
+                            <input type="number" id="manual-length" min="1" class="dimension-input w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Largeur (cm)</label>
+                            <input type="number" id="manual-width" min="1" class="dimension-input w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Hauteur (cm)</label>
+                            <input type="number" id="manual-height" min="1" class="dimension-input w-full p-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                        </div>
+                        <button id="apply-manual" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3 px-4 rounded-lg transition-colors">
+                            Appliquer les dimensions
+                        </button>
+                        
+                        <div class="pt-4 border-t border-gray-200">
+                            <label class="block text-sm font-medium text-gray-700 mb-3">Ajustement rapide de la hauteur</label>
+                            <div class="space-y-2">
+                                <input type="range" id="height-slider" min="1" max="50" value="10" class="range-modern w-full">
+                                <div class="flex justify-between text-xs text-gray-500">
+                                    <span>1 cm</span>
+                                    <span id="height-value" class="font-mono font-medium text-gray-900">10 cm</span>
+                                    <span>50 cm</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bouton flottant mobile -->
+    <button id="mobile-panel-toggle" class="mobile-only fixed bottom-6 right-6 w-14 h-14 bg-blue-600 hover:bg-blue-700 text-white rounded-full shadow-lg flex items-center justify-center z-50 transition-all">
+        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+        </svg>
+    </button>
+
+    <!-- Panneau mobile -->
+    <div id="mobile-panel" class="mobile-only mobile-panel fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-40 max-h-[85vh]">
+        <div class="p-4">
+            <!-- Handle -->
+            <div class="w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4"></div>
+            
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-gray-900">Designer de Boîte</h2>
+                <button id="mobile-panel-close" class="p-2 rounded-full hover:bg-gray-100">
+                    <svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            
+            <!-- Contenu mobile simplifié -->
+            <div class="space-y-4 max-h-96 overflow-y-auto">
+                <div>
+                    <h3 class="font-semibold text-gray-900 mb-3">Modèles rapides</h3>
+                    <div class="grid grid-cols-2 gap-2">
+                        <button class="mobile-preset-btn p-3 border border-gray-200 rounded-lg text-center" data-dims="15,10,8">
+                            <div class="text-sm font-medium">Bijoux</div>
+                            <div class="text-xs text-gray-500">15×10×8</div>
+                        </button>
+                        <button class="mobile-preset-btn p-3 border border-gray-200 rounded-lg text-center" data-dims="22,8,5">
+                            <div class="text-sm font-medium">Stylos</div>
+                            <div class="text-xs text-gray-500">22×8×5</div>
+                        </button>
+                        <button class="mobile-preset-btn p-3 border border-gray-200 rounded-lg text-center" data-dims="35,25,15">
+                            <div class="text-sm font-medium">Archive</div>
+                            <div class="text-xs text-gray-500">35×25×15</div>
+                        </button>
+                        <button class="mobile-preset-btn p-3 border border-gray-200 rounded-lg text-center" data-dims="20,20,10">
+                            <div class="text-sm font-medium">Carrée</div>
+                            <div class="text-xs text-gray-500">20×20×10</div>
+                        </button>
+                    </div>
+                </div>
+                
+                <div>
+                    <h3 class="font-semibold text-gray-900 mb-3">Ajustement rapide</h3>
+                    <div class="grid grid-cols-3 gap-2 mb-3">
+                        <input type="number" id="mobile-length" placeholder="L" class="p-2 border border-gray-200 rounded text-center text-sm">
+                        <input type="number" id="mobile-width" placeholder="l" class="p-2 border border-gray-200 rounded text-center text-sm">
+                        <input type="number" id="mobile-height" placeholder="h" class="p-2 border border-gray-200 rounded text-center text-sm">
+                    </div>
+                    <button id="mobile-apply" class="w-full bg-blue-600 text-white py-2 rounded-lg text-sm font-medium">
+                        Appliquer
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Affichage des dimensions -->
+    <div class="floating-panel fixed top-6 right-6 p-4 rounded-xl text-center mobile-only">
+        <h3 class="text-sm font-medium text-gray-700">Dimensions</h3>
+        <p id="mobile-dimensions-text" class="text-lg font-mono font-bold text-gray-900 mt-1"></p>
+    </div>
+
+    <div class="floating-panel fixed top-20 right-6 p-3 rounded-xl text-center desktop-only">
+        <h3 class="text-xs font-medium text-gray-700 mb-1">Dimensions actuelles</h3>
+        <p id="dimensions-text" class="text-sm font-mono font-bold text-gray-900"></p>
+    </div>
+
+    <!-- Zone de notification -->
+    <div id="notification" class="notification"></div>
+
+    <!-- Instructions mobile -->
+    <div class="mobile-only fixed bottom-20 left-6 right-6 text-center">
+        <p class="text-sm text-gray-600 bg-white bg-opacity-90 rounded-lg p-2">
+            Glissez pour faire tourner • Pincez pour zoomer
+        </p>
+    </div>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // État de l'application
+        let scene, camera, renderer, currentBox = null;
+        let currentDimensions = { l: 26, w: 16, h: 10 };
+        let cameraControls = { yaw: 45, pitch: 30, zoom: 20 };
+        
+        // Éléments DOM
+        const container = document.getElementById('main-content');
+        const canvas = document.createElement('canvas');
+        
+        // Variables de contrôle
+        let isDragging = false;
+        let lastPointerX = 0, lastPointerY = 0;
+        let touchDistance = 0;
+
+        // Configuration Three.js
+        function initScene() {
+            container.appendChild(canvas);
+            
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xf8fafc);
+            scene.fog = new THREE.Fog(0xf8fafc, 20, 100);
+            
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            
+            // Lumières améliorées
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(10, 10, 5);
+            directionalLight.castShadow = true;
+            directionalLight.shadow.mapSize.width = 2048;
+            directionalLight.shadow.mapSize.height = 2048;
+            scene.add(directionalLight);
+            
+            // Sol avec texture
+            const groundGeometry = new THREE.PlaneGeometry(200, 200);
+            const groundMaterial = new THREE.MeshLambertMaterial({ 
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0.8
+            });
+            const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true;
+            scene.add(ground);
+            
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ 
+                canvas: canvas, 
+                antialias: true,
+                alpha: true
+            });
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            
+            // Événements
+            setupEventListeners();
+            
+            // Initialisation
+            updateCameraPosition();
+            updateVisualization();
+            animate();
+        }
+
+        function createBox() {
+            if (currentBox) {
+                scene.remove(currentBox);
+                currentBox.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
+            
+            const { l, w, h } = currentDimensions;
+            const scale = 0.1;
+            
+            currentBox = new THREE.Group();
+            
+            // Matériau principal avec gradient
+            const boxMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8B4513,
+                metalness: 0.1,
+                roughness: 0.6,
+                transparent: true,
+                opacity: 0.95
+            });
+            
+            // Géométrie principale
+            const boxGeometry = new THREE.BoxGeometry(l * scale, h * scale, w * scale);
+            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+            boxMesh.castShadow = true;
+            boxMesh.receiveShadow = true;
+            boxMesh.position.y = (h * scale) / 2;
+            
+            currentBox.add(boxMesh);
+            
+            // Arêtes
+            const edges = new THREE.EdgesGeometry(boxGeometry);
+            const edgeMaterial = new THREE.LineBasicMaterial({ 
+                color: 0x4a4a4a, 
+                linewidth: 2,
+                transparent: true,
+                opacity: 0.8
+            });
+            const edgeLines = new THREE.LineSegments(edges, edgeMaterial);
+            edgeLines.position.y = (h * scale) / 2;
+            currentBox.add(edgeLines);
+            
+            scene.add(currentBox);
+            
+            // Ajustement automatique du zoom
+            const maxDim = Math.max(l, w, h) * scale;
+            cameraControls.zoom = Math.max(15, maxDim * 3);
+            updateCameraPosition();
+        }
+
+        function updateCameraPosition() {
+            const { yaw, pitch, zoom } = cameraControls;
+            const yawRad = THREE.MathUtils.degToRad(yaw);
+            const pitchRad = THREE.MathUtils.degToRad(pitch);
+            
+            const targetY = currentDimensions.h * 0.05; // Centre de la boîte
+            
+            camera.position.x = zoom * Math.cos(pitchRad) * Math.sin(yawRad);
+            camera.position.y = targetY + zoom * Math.sin(pitchRad);
+            camera.position.z = zoom * Math.cos(pitchRad) * Math.cos(yawRad);
+            
+            camera.lookAt(0, targetY, 0);
+        }
+
+        function updateVisualization() {
+            const { l, w, h } = currentDimensions;
+            
+            // Mise à jour de l'affichage
+            const dimensionText = `${l.toFixed(1)} × ${w.toFixed(1)} × ${h.toFixed(1)} cm`;
+            document.getElementById('dimensions-text').textContent = dimensionText;
+            document.getElementById('mobile-dimensions-text').textContent = dimensionText;
+            document.getElementById('height-value').textContent = `${h.toFixed(1)} cm`;
+            
+            // Mise à jour des champs
+            document.getElementById('manual-length').value = l.toFixed(1);
+            document.getElementById('manual-width').value = w.toFixed(1);
+            document.getElementById('manual-height').value = h.toFixed(1);
+            document.getElementById('height-slider').value = h;
+            
+            document.getElementById('mobile-length').value = l.toFixed(1);
+            document.getElementById('mobile-width').value = w.toFixed(1);
+            document.getElementById('mobile-height').value = h.toFixed(1);
+            
+            createBox();
+        }
+
+        function setupEventListeners() {
+            // Gestion des onglets
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tab = btn.dataset.tab;
+                    document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                    btn.classList.add('active');
+                    document.getElementById(`${tab}-content`).classList.add('active');
+                });
+            });
+            
+            // Presets desktop
+            document.querySelectorAll('.preset-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    document.querySelectorAll('.preset-card').forEach(c => c.classList.remove('selected'));
+                    card.classList.add('selected');
+                    
+                    const [l, w, h] = card.dataset.dims.split(',').map(Number);
+                    currentDimensions = { l, w, h };
+                    updateVisualization();
+                    showNotification('Modèle appliqué !', 'success');
+                });
+            });
+            
+            // Presets mobile
+            document.querySelectorAll('.mobile-preset-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const [l, w, h] = btn.dataset.dims.split(',').map(Number);
+                    currentDimensions = { l, w, h };
+                    updateVisualization();
+                    showNotification('Modèle appliqué !', 'success');
+                });
+            });
+            
+            // Ratios
+            document.querySelectorAll('.ratio-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const ratio = parseFloat(btn.dataset.ratio);
+                    const baseValue = parseFloat(document.getElementById('base-value').value);
+                    const baseDim = document.querySelector('input[name="base-dim"]:checked').value;
+                    
+                    if (baseDim === 'length') {
+                        currentDimensions.l = baseValue;
+                        currentDimensions.w = baseValue / ratio;
+                    } else {
+                        currentDimensions.w = baseValue;
+                        currentDimensions.l = baseValue * ratio;
+                    }
+                    currentDimensions.h = currentDimensions.w / ratio;
+                    
+                    updateVisualization();
+                    showNotification('Ratio appliqué !', 'success');
+                });
+            });
+            
+            // Dimensions manuelles
+            document.getElementById('apply-manual').addEventListener('click', () => {
+                const l = parseFloat(document.getElementById('manual-length').value);
+                const w = parseFloat(document.getElementById('manual-width').value);
+                const h = parseFloat(document.getElementById('manual-height').value);
+                
+                if (l > 0 && w > 0 && h > 0) {
+                    currentDimensions = { l, w, h };
+                    updateVisualization();
+                    showNotification('Dimensions appliquées !', 'success');
+                }
+            });
+            
+            // Dimensions mobile
+            document.getElementById('mobile-apply').addEventListener('click', () => {
+                const l = parseFloat(document.getElementById('mobile-length').value);
+                const w = parseFloat(document.getElementById('mobile-width').value);
+                const h = parseFloat(document.getElementById('mobile-height').value);
+                
+                if (l > 0 && w > 0 && h > 0) {
+                    currentDimensions = { l, w, h };
+                    updateVisualization();
+                    closeMobilePanel();
+                    showNotification('Dimensions mises à jour !', 'success');
+                }
+            });
+            
+            // Slider hauteur
+            document.getElementById('height-slider').addEventListener('input', (e) => {
+                currentDimensions.h = parseFloat(e.target.value);
+                updateVisualization();
+            });
+            
+            // Panneau mobile
+            document.getElementById('mobile-panel-toggle').addEventListener('click', openMobilePanel);
+            document.getElementById('mobile-panel-close').addEventListener('click', closeMobilePanel);
+            
+            // Contrôles rapides
+            document.getElementById('reset-view').addEventListener('click', () => {
+                cameraControls = { yaw: 45, pitch: 30, zoom: 20 };
+                updateCameraPosition();
+                showNotification('Vue réinitialisée', 'info');
+            });
+            
+            document.getElementById('save-config').addEventListener('click', saveConfiguration);
+            document.getElementById('share-config').addEventListener('click', shareConfiguration);
+            
+            // Contrôles de caméra
+            canvas.addEventListener('pointerdown', onPointerDown);
+            canvas.addEventListener('pointermove', onPointerMove);
+            canvas.addEventListener('pointerup', onPointerUp);
+            canvas.addEventListener('wheel', onWheel);
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // Gestion des interactions
+        function onPointerDown(event) {
+            isDragging = true;
+            lastPointerX = event.clientX;
+            lastPointerY = event.clientY;
+            container.classList.add('dragging');
+        }
+
+        function onPointerMove(event) {
+            if (!isDragging) return;
+            
+            const deltaX = event.clientX - lastPointerX;
+            const deltaY = event.clientY - lastPointerY;
+            
+            cameraControls.yaw -= deltaX * 0.5;
+            cameraControls.pitch += deltaY * 0.5;
+            cameraControls.pitch = Math.max(-89, Math.min(89, cameraControls.pitch));
+            
+            updateCameraPosition();
+            
+            lastPointerX = event.clientX;
+            lastPointerY = event.clientY;
+        }
+
+        function onPointerUp() {
+            isDragging = false;
+            container.classList.remove('dragging');
+        }
+
+        function onWheel(event) {
+            event.preventDefault();
+            
+            const delta = event.deltaY * 0.01;
+            cameraControls.zoom = Math.max(5, Math.min(50, cameraControls.zoom + delta));
+            
+            updateCameraPosition();
+        }
+
+        function onWindowResize() {
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+        }
+
+        // Fonctions utilitaires
+        function openMobilePanel() {
+            document.getElementById('mobile-panel').classList.add('open');
+        }
+
+        function closeMobilePanel() {
+            document.getElementById('mobile-panel').classList.remove('open');
+        }
+
+        function showNotification(message, type = 'info') {
+            const notification = document.getElementById('notification');
+            notification.textContent = message;
+            notification.className = `notification show ${
+                type === 'success' ? 'bg-green-500' : 
+                type === 'error' ? 'bg-red-500' : 'bg-blue-500'
+            }`;
+            
+            setTimeout(() => {
+                notification.classList.remove('show');
+            }, 3000);
+        }
+
+        function saveConfiguration() {
+            const config = {
+                dimensions: currentDimensions,
+                timestamp: new Date().toISOString()
+            };
+            
+            localStorage.setItem('box-design-config', JSON.stringify(config));
+            showNotification('Configuration sauvegardée !', 'success');
+        }
+
+        function shareConfiguration() {
+            const { l, w, h } = currentDimensions;
+            const url = `${window.location.origin}${window.location.pathname}?l=${l}&w=${w}&h=${h}`;
+            
+            if (navigator.share) {
+                navigator.share({
+                    title: 'Ma boîte personnalisée',
+                    text: `Boîte de ${l}×${w}×${h} cm`,
+                    url: url
+                });
+            } else {
+                navigator.clipboard.writeText(url);
+                showNotification('Lien copié dans le presse-papier !', 'success');
+            }
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera);
+        }
+
+        // Chargement des paramètres depuis l'URL
+        function loadFromURL() {
+            const params = new URLSearchParams(window.location.search);
+            if (params.has('l') && params.has('w') && params.has('h')) {
+                currentDimensions = {
+                    l: parseFloat(params.get('l')),
+                    w: parseFloat(params.get('w')),
+                    h: parseFloat(params.get('h'))
+                };
+            }
+        }
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFromURL();
+            initScene();
+        });
+    </script>
+</body>
+</html>
