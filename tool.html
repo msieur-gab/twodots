@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Outil de Design de Boîte 3D</title>
+    <!-- Tailwind CSS pour un style moderne -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Styles de base pour la police */
+        body {
+            font-family: 'Inter', sans-serif;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            overflow: hidden; /* Empêche le défilement global de la page */
+        }
+        /* Conteneur du canvas pour remplir l'espace disponible */
+        #main-content { /* Changé de #canvas-container pour correspondre au HTML */
+            width: 100%;
+            height: 100%;
+            cursor: grab; /* Curseur "grab" réactivé pour le drag */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        canvas {
+            display: block;
+            touch-action: none; /* Empêche le défilement par défaut sur le toucher */
+            width: 100%; /* Le canvas remplit la largeur de son conteneur */
+            height: 100%; /* Le canvas remplit la hauteur de son conteneur */
+        }
+        /* Styles personnalisés pour le slider de portée */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            margin-top: -8px;
+        }
+        input[type=range]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #3b82f6;
+            cursor: pointer;
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        input[type=range]::-webkit-slider-runnable-track {
+            height: 4px;
+            background: #cbd5e0;
+            border-radius: 2px;
+        }
+        input[type=range]::-moz-range-track {
+            height: 4px;
+            background: #cbd5e0;
+            border-radius: 2px;
+        }
+
+        /* Styles personnalisés pour l'animation des détails (accordéons) */
+        details > summary::-webkit-details-marker {
+            display: none; /* Cache le marqueur par défaut pour Chrome/Safari */
+        }
+        details > summary {
+            list-style: none; /* Cache le marqueur par défaut pour Firefox/Edge */
+        }
+        details > summary svg {
+            transition: transform 0.3s ease-in-out; /* Animation de la flèche */
+        }
+        details[open] > summary svg {
+            transform: rotate(180deg); /* Rotation de la flèche lorsque l'accordéon est ouvert */
+        }
+        .details-content {
+            overflow: hidden;
+            transition: max-height 0.3s ease-in-out; /* Transition fluide pour la hauteur */
+        }
+
+        /* Flou et transparence de la barre latérale */
+        #sidebar {
+            backdrop-filter: blur(4px); /* Applique le flou d'arrière-plan */
+            background-color: rgba(255, 255, 255, 0.85); /* Blanc légèrement transparent */
+        }
+
+        /* Classes pour la barre latérale "off-canvas" (pour les petits écrans) */
+        #sidebar {
+            transform: translateX(-100%); /* Masquée par défaut sur les petits écrans */
+        }
+
+        .sidebar-open #sidebar {
+            transform: translateX(0); /* Glisse en vue */
+        }
+
+        .sidebar-open #sidebar-overlay {
+            display: block; /* Affiche le calque d'arrière-plan */
+        }
+        
+        /* Sur les grands écrans (desktop), la barre latérale est toujours visible et statique */
+        @media (min-width: 1024px) { /* Point de rupture 'lg' de Tailwind */
+            #sidebar {
+                position: static; /* N'est plus fixe, fait partie du layout flex */
+                transform: translateX(0); /* Toujours visible */
+                width: 320px; /* Équivalent de sm:w-80 */
+                box-shadow: none; /* Pas d'ombre car elle fait partie du layout */
+            }
+            #sidebar-toggle {
+                display: none; /* Cache le bouton de bascule sur le bureau */
+            }
+            #sidebar-overlay {
+                display: none; /* Cache le calque d'arrière-plan sur le bureau */
+            }
+        }
+    </style>
+    <!-- Importation de la police Inter depuis Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+</head>
+<body class="bg-gray-100 text-gray-800 flex h-screen w-screen relative">
+
+    <!-- Bouton de bascule de la barre latérale (visible uniquement sur les petits écrans) -->
+    <button id="sidebar-toggle" class="fixed top-4 left-4 z-50 p-3 bg-blue-600 text-white rounded-full shadow-lg lg:hidden">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+        </svg>
+    </button>
+
+    <!-- Calque d'arrière-plan pour le mode "off-canvas" (visible uniquement sur les petits écrans lorsque la barre latérale est ouverte) -->
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black bg-opacity-50 z-40 hidden lg:hidden"></div>
+
+    <!-- Panneau Latéral (Sidebar) -->
+    <div id="sidebar" class="fixed top-0 left-0 h-full w-full sm:w-80 bg-white shadow-xl p-4 sm:p-6 flex flex-col overflow-y-auto z-50 transition-transform duration-300 ease-in-out">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Boîte 3D Designer</h1>
+            <p class="text-gray-600 mt-2">Choisissez ou créez votre boîte sur mesure.</p>
+        </div>
+
+        <!-- Section Modèles Prédéfinis -->
+        <details class="bg-gray-50 p-4 rounded-lg border mb-4" open> <!-- Ouvert par défaut -->
+            <summary class="font-bold text-lg cursor-pointer text-gray-800 flex justify-between items-center">
+                1. Choisir un modèle
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </summary>
+            <div class="details-content pt-3">
+                <div class="grid grid-cols-1 gap-3">
+                    <button data-dims="15,10,8" class="preset-btn bg-purple-500 hover:bg-purple-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">Boîte à bijoux</button>
+                    <button data-dims="22,8,5" class="preset-btn bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">Coffret à stylos</button>
+                    <button data-dims="35,25,15" class="preset-btn bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">Boîte d'archive</button>
+                </div>
+            </div>
+        </details>
+
+        <!-- Section Calcul par Ratio -->
+        <details class="bg-gray-50 p-4 rounded-lg border mb-4">
+            <summary class="font-bold text-lg cursor-pointer text-gray-800 flex justify-between items-center">
+                2. Créer sur mesure
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </summary>
+            <div class="details-content pt-3">
+                <div class="flex items-center space-x-2 mb-3">
+                    <input type="number" id="base-value" value="26" min="1" class="w-24 p-2 border rounded-md">
+                    <span class="text-gray-600">cm, basé sur :</span>
+                </div>
+                <div class="flex items-center space-x-4 mb-3">
+                     <label class="flex items-center"><input type="radio" name="base-dim" value="length" checked class="mr-2 h-4 w-4 text-blue-600"> Longueur</label>
+                     <label class="flex items-center"><input type="radio" name="base-dim" value="width" class="mr-2 h-4 w-4 text-blue-600"> Largeur</label>
+                </div>
+                <p class="mb-2 font-semibold">Appliquer un ratio :</p>
+                <div class="grid grid-cols-1 gap-3">
+                    <button data-ratio="1.618" class="ratio-btn bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">Ratio d'Or (~1.62)</button>
+                    <button data-ratio="2.0" class="ratio-btn bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">Ratio 2:1</button>
+                    <button data-ratio="1.414" class="ratio-btn bg-teal-500 hover:bg-teal-600 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200">Ratio Japonais (~1.41)</button>
+                </div>
+            </div>
+        </details>
+
+        <!-- Section Ajustement Direct & Affichage -->
+        <details class="bg-gray-50 p-4 rounded-lg border mb-4">
+            <summary class="font-bold text-lg cursor-pointer text-gray-800 flex justify-between items-center">
+                3. Ajustement direct des dimensions
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </summary>
+            <div class="details-content pt-3">
+                <div class="input-group-manual mb-3 space-y-3">
+                    <label class="block">Longueur (cm):
+                        <input type="number" id="manual-length" min="1" class="w-full p-2 border rounded-md mt-1">
+                    </label>
+                    <label class="block">Largeur (cm):
+                        <input type="number" id="manual-width" min="1" class="w-full p-2 border rounded-md mt-1">
+                    </label>
+                    <label class="block">Hauteur (cm):
+                        <input type="number" id="manual-height" min="1" class="w-full p-2 border rounded-md mt-1">
+                    </label>
+                </div>
+                <button id="applyManualDimsButton" class="btn bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 w-full mb-3">Appliquer les dimensions</button>
+
+                <p class="mb-2 font-semibold text-gray-800">Ajuster la hauteur (slider):</p>
+                <div class="flex items-center space-x-4 mb-4">
+                    <input type="range" id="height-slider" min="1" max="50" value="10" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                    <span id="height-value" class="font-mono text-lg w-16 text-center">10 cm</span>
+                </div>
+            </div>
+        </details>
+            
+        <!-- Nouvelle section pour les contrôles de la vue 3D -->
+        <details class="bg-gray-50 p-4 rounded-lg border mb-4">
+            <summary class="font-bold text-lg cursor-pointer text-gray-800 flex justify-between items-center">
+                4. Contrôles de la Vue 3D
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+            </summary>
+            <div class="details-content pt-3">
+                <div class="space-y-3 mb-3">
+                    <label class="block">Rotation Horizontale:
+                        <input type="range" id="camera-yaw-slider" min="0" max="360" value="45" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="yaw-value" class="font-mono text-lg w-16 text-center">45°</span>
+                    </label>
+                    <label class="block">Rotation Verticale:
+                        <input type="range" id="camera-pitch-slider" min="-60" max="60" value="30" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="pitch-value" class="font-mono text-lg w-16 text-center">30°</span>
+                    </label>
+                    <label class="block">Zoom:
+                        <input type="range" id="camera-zoom-slider" min="5" max="50" value="20" step="0.1" class="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer">
+                        <span id="zoom-value" class="font-mono text-lg w-16 text-center">20.0</span>
+                    </label>
+                </div>
+                <button id="resetViewButton" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 mt-2 w-full">Réinitialiser la Vue</button>
+            </div>
+        </details>
+
+        <div class="text-center bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 mt-auto">
+            <h2 class="font-bold text-lg">Dimensions Finales</h2>
+            <p id="dimensions-text" class="text-2xl font-mono mt-1"></p>
+        </div>
+    </div>
+
+    <!-- Zone de Visualisation 3D (Main Content) -->
+    <div id="main-content" class="flex-grow bg-gray-200 rounded-none border-l border-gray-300 overflow-hidden"></div>
+
+    <!-- Librairies Three.js -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- GESTION DE L'ÉTAT ---
+        let scene, camera, renderer, currentBox = null;
+        let currentDimensions = { l: 26, w: 16, h: 10 }; // Dimensions initiales
+
+        // Correction: Utiliser 'main-content' car c'est l'ID du conteneur dans le HTML
+        const container = document.getElementById('main-content');
+        // Créer l'élément canvas dynamiquement et l'ajouter au conteneur
+        const canvas = document.createElement('canvas'); 
+        container.appendChild(canvas); 
+
+        const dimensionsText = document.getElementById('dimensions-text');
+        const heightSlider = document.getElementById('height-slider');
+        const heightValueText = document.getElementById('height-value');
+        const baseValueInput = document.getElementById('base-value');
+
+        // Éléments pour la saisie manuelle
+        const manualLengthInput = document.getElementById('manual-length');
+        const manualWidthInput = document.getElementById('manual-width');
+        const manualHeightInput = document.getElementById('manual-height');
+        const applyManualDimsButton = document.getElementById('applyManualDimsButton');
+
+        // Éléments pour les nouveaux contrôles de caméra par sliders
+        const cameraYawSlider = document.getElementById('camera-yaw-slider');
+        const cameraPitchSlider = document.getElementById('camera-pitch-slider');
+        const cameraZoomSlider = document.getElementById('camera-zoom-slider');
+        const yawValueText = document.getElementById('yaw-value');
+        const pitchValueText = document.getElementById('pitch-value');
+        const zoomValueText = document.getElementById('zoom-value');
+
+        // Variables pour le drag de la caméra
+        let isDragging = false;
+        let previousMouseX = 0;
+        let previousMouseY = 0;
+        const dragRotationSpeed = 0.5; // Sensibilité de la rotation au drag
+
+        // Valeurs de caméra par défaut (pour la réinitialisation et l'initialisation)
+        let cameraYaw = 45; // degrés
+        let cameraPitch = 30; // degrés
+        let cameraZoom = 20; // unités three.js
+        const DEFAULT_CAMERA_YAW = 45;
+        const DEFAULT_CAMERA_PITCH = 30;
+        const DEFAULT_CAMERA_ZOOM = 20;
+
+        // Cible de la caméra (le point que la caméra regarde). Initialisée à un point de référence.
+        let cameraLookAtPoint = new THREE.Vector3(0, 0, 0); // La boîte simple est basée à y=0
+
+        // --- CONFIGURATION DE LA SCÈNE 3D ---
+        function initScene() {
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xe0e0e0); // Couleur de fond plus claire
+            scene.fog = new THREE.Fog(0xe0e0e0, 20, 100); // Brume pour un effet de profondeur
+
+            // Configuration de la caméra
+            camera = new THREE.PerspectiveCamera(50, container.clientWidth / container.clientHeight, 0.1, 1000);
+            
+            // Lumières
+            const hemiLight = new THREE.HemisphereLight(0xffffff, 0x8d8d8d, 2); // Lumière d'ambiance plus intense
+            hemiLight.position.set(0, 20, 0);
+            scene.add(hemiLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 2); // Lumière directionnelle principale
+            dirLight.position.set(10, 10, 10);
+            dirLight.castShadow = true; // Active les ombres projetées
+            // Ajustement de la caméra d'ombre pour un meilleur rendu
+            dirLight.shadow.camera.top = 4;
+            dirLight.shadow.camera.bottom = -4;
+            dirLight.shadow.camera.left = -4;
+            dirLight.shadow.camera.right = 4;
+            dirLight.shadow.mapSize.width = 1024; // Résolution des ombres
+            dirLight.shadow.mapSize.height = 1024;
+            scene.add(dirLight);
+
+            // Plan de sol
+            const ground = new THREE.Mesh(new THREE.PlaneGeometry(200, 200), new THREE.MeshPhongMaterial({ color: 0xbbbbbb, depthWrite: false }));
+            ground.rotation.x = -Math.PI / 2;
+            ground.receiveShadow = true; // Le sol reçoit les ombres
+            scene.add(ground);
+
+            // Rendu
+            renderer = new THREE.WebGLRenderer({ antialias: true, canvas: canvas }); // Spécifier le canvas créé dynamiquement
+            renderer.setSize(container.clientWidth, container.clientHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.shadowMap.enabled = true; // Active les cartes d'ombres
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Type d'ombre (plus doux)
+
+            // Gestion du redimensionnement de la fenêtre
+            window.addEventListener('resize', onWindowResize);
+
+            // Événement du bouton de réinitialisation
+            document.getElementById('resetViewButton').addEventListener('click', resetCameraView);
+
+            // Ajout des écouteurs d'événements pour le drag de la caméra
+            canvas.addEventListener('mousedown', onMouseDown);
+            canvas.addEventListener('mouseup', onMouseUp);
+            canvas.addEventListener('mousemove', onMouseMove);
+            canvas.addEventListener('wheel', onMouseWheel); // Molette pour le zoom
+
+            canvas.addEventListener('touchstart', onTouchStart, { passive: false });
+            canvas.addEventListener('touchend', onTouchEnd);
+            canvas.addEventListener('touchmove', onTouchMove, { passive: false });
+
+            // Lancement de l'animation
+            animate();
+
+            // Initialiser la position de la caméra avec les valeurs par défaut
+            updateCameraPosition();
+        }
+
+        // --- Logique principale: Mise à jour et Visualisation ---
+        function updateVisualization() {
+            const { l, w, h } = currentDimensions;
+            const scaleFactor = 10; // Pour convertir les cm en unités Three.js plus gérables
+            
+            // Mise à jour de l'interface utilisateur
+            dimensionsText.textContent = `${l.toFixed(1)} x ${w.toFixed(1)} x ${h.toFixed(1)} cm`;
+            heightValueText.textContent = `${h.toFixed(1)} cm`;
+            heightSlider.value = h;
+            baseValueInput.value = l.toFixed(1); // Met à jour le champ de base avec la longueur actuelle
+
+            // Met à jour les champs de saisie manuels
+            manualLengthInput.value = l.toFixed(1);
+            manualWidthInput.value = w.toFixed(1);
+            manualHeightInput.value = h.toFixed(1);
+
+            // Supprime l'ancienne boîte
+            if (currentBox) {
+                scene.remove(currentBox);
+                // Libère la mémoire des géométries et matériaux
+                currentBox.traverse(child => {
+                    if (child.geometry) child.geometry.dispose();
+                    if (child.material) {
+                        if (Array.isArray(child.material)) {
+                            child.material.forEach(m => m.dispose());
+                        } else {
+                            child.material.dispose();
+                        }
+                    }
+                });
+            }
+
+            // Crée la nouvelle boîte (version simple)
+            currentBox = new THREE.Group();
+
+            // Matériau en bois mat (couleur bois, rugosité pour un aspect mat)
+            const boxMaterial = new THREE.MeshStandardMaterial({
+                color: 0x8B4513, // Couleur marron pour le bois
+                metalness: 0.1, // Peu métallique
+                roughness: 0.7  // Aspect mat
+            });
+
+            // Géométrie de la boîte principale
+            const boxGeometry = new THREE.BoxGeometry(l / scaleFactor, h / scaleFactor, w / scaleFactor);
+            const boxMesh = new THREE.Mesh(boxGeometry, boxMaterial);
+            boxMesh.castShadow = true;
+            boxMesh.receiveShadow = true;
+            boxMesh.position.y = (h / scaleFactor) / 2; // Positionne la base de la boîte sur le plan Y=0
+
+            currentBox.add(boxMesh);
+
+            // Ajoute des arêtes à la boîte principale
+            const boxEdges = new THREE.EdgesGeometry(boxGeometry);
+            const boxLine = new THREE.LineSegments(boxEdges, new THREE.LineBasicMaterial({ color: 0x5a2d0b, linewidth: 2 })); // Arêtes plus foncées pour le bois
+            boxLine.position.y = (h / scaleFactor) / 2;
+            currentBox.add(boxLine);
+
+            scene.add(currentBox);
+
+            // La cible de la caméra est mise à jour pour suivre le centre de la boîte
+            // Le centre vertical de la boîte est maintenant h/2 (car pas de support)
+            cameraLookAtPoint.set(currentBox.position.x, (h / scaleFactor) / 2, currentBox.position.z);
+            
+            // Ajuster le zoom initial pour que la boîte soit toujours visible
+            const maxDimScaled = Math.max(l / scaleFactor, w / scaleFactor, h / scaleFactor); // Plus de support à inclure
+            cameraZoom = maxDimScaled * 2.5; // Multiplier pour donner un espace autour de la boîte
+            cameraZoom = Math.max(cameraZoom, parseFloat(cameraZoomSlider.min)); // Assurer qu'il ne descend pas en dessous du min
+            cameraZoom = Math.min(cameraZoom, parseFloat(cameraZoomSlider.max)); // Assurer qu'il ne dépasse pas le max
+
+            // Mettre à jour les sliders pour refléter cette nouvelle vue initiale
+            cameraYaw = DEFAULT_CAMERA_YAW;
+            cameraPitch = DEFAULT_CAMERA_PITCH;
+            cameraYawSlider.value = cameraYaw;
+            cameraPitchSlider.value = cameraPitch;
+            cameraZoomSlider.value = cameraZoom;
+
+            updateCameraPosition(); // Appliquer la nouvelle position et le zoom de la caméra
+        }
+
+        // --- Fonctions de contrôle de la caméra (via sliders et glisser-déposer) ---
+        function updateCameraPosition() {
+            const yawRad = THREE.MathUtils.degToRad(cameraYaw);
+            const pitchRad = THREE.MathUtils.degToRad(cameraPitch);
+
+            // Calcul de la position de la caméra en coordonnées sphériques
+            const XZ_distance = cameraZoom * Math.cos(pitchRad);
+            camera.position.x = cameraLookAtPoint.x + XZ_distance * Math.sin(yawRad);
+            camera.position.y = cameraLookAtPoint.y + cameraZoom * Math.sin(pitchRad);
+            camera.position.z = cameraLookAtPoint.z + XZ_distance * Math.cos(yawRad);
+
+            camera.lookAt(cameraLookAtPoint); // La caméra regarde toujours la cible
+            camera.updateProjectionMatrix(); // Met à jour la matrice de projection de la caméra
+            
+            // Met à jour l'affichage des valeurs des sliders
+            yawValueText.textContent = `${cameraYaw.toFixed(0)}°`; // Arrondi pour l'affichage
+            pitchValueText.textContent = `${cameraPitch.toFixed(0)}°`; // Arrondi pour l'affichage
+            zoomValueText.textContent = `${cameraZoom.toFixed(1)}`;
+        }
+
+        // --- Événements de souris pour le glisser-déposer ---
+        function onMouseDown(event) {
+            isDragging = true;
+            previousMouseX = event.clientX;
+            previousMouseY = event.clientY;
+            canvas.style.cursor = 'grabbing';
+        }
+
+        function onMouseUp(event) {
+            isDragging = false;
+            canvas.style.cursor = 'grab';
+        }
+
+        function onMouseMove(event) {
+            if (!isDragging) return;
+
+            const deltaX = event.clientX - previousMouseX;
+            const deltaY = event.clientY - previousMouseY;
+
+            cameraYaw -= deltaX * dragRotationSpeed; // Rotation horizontale
+            cameraPitch += deltaY * dragRotationSpeed; // Rotation verticale
+
+            // Limite la rotation verticale pour éviter les renversements
+            cameraPitch = Math.max(-89, Math.min(89, cameraPitch));
+
+            // Met à jour les sliders pour refléter la rotation par drag
+            cameraYawSlider.value = cameraYaw;
+            cameraPitchSlider.value = cameraPitch;
+
+            updateCameraPosition();
+
+            previousMouseX = event.clientX;
+            previousMouseY = event.clientY;
+        }
+
+        function onMouseWheel(event) {
+            event.preventDefault(); // Empêche le défilement de la page
+
+            // Ajuste la vitesse de zoom pour la molette
+            const zoomAmount = event.deltaY * 0.05; // Ajustez cette valeur pour plus/moins de sensibilité
+            cameraZoom += zoomAmount;
+
+            // Limite le zoom pour qu'il reste dans les bornes des sliders
+            cameraZoom = Math.max(parseFloat(cameraZoomSlider.min), Math.min(parseFloat(cameraZoomSlider.max), cameraZoom));
+            
+            // Met à jour le slider de zoom pour refléter le zoom par molette
+            cameraZoomSlider.value = cameraZoom;
+
+            updateCameraPosition();
+        }
+
+        // --- Événements tactiles pour le glisser-déposer ---
+        function onTouchStart(event) {
+            event.preventDefault(); // Empêche le défilement par défaut
+            if (event.touches.length === 1) {
+                isDragging = true;
+                previousMouseX = event.touches[0].clientX;
+                previousMouseY = event.touches[0].clientY;
+            }
+        }
+
+        function onTouchEnd(event) {
+            isDragging = false;
+        }
+
+        function onTouchMove(event) {
+            event.preventDefault(); // Empêche le défilement par défaut
+            if (event.touches.length === 1 && isDragging) {
+                const clientX = event.touches[0].clientX;
+                const clientY = event.touches[0].clientY;
+
+                const deltaX = clientX - previousMouseX;
+                const deltaY = clientY - previousMouseY;
+
+                cameraYaw -= deltaX * dragRotationSpeed;
+                cameraPitch += deltaY * dragRotationSpeed;
+                cameraPitch = Math.max(-89, Math.min(89, cameraPitch));
+
+                // Met à jour les sliders pour refléter la rotation tactile
+                cameraYawSlider.value = cameraYaw;
+                cameraPitchSlider.value = cameraPitch;
+
+                updateCameraPosition();
+
+                previousMouseX = clientX;
+                previousMouseY = clientY;
+            }
+        }
+
+
+        // --- Fonction de réinitialisation de la caméra ---
+        function resetCameraView() {
+            cameraYaw = DEFAULT_CAMERA_YAW;
+            cameraPitch = DEFAULT_CAMERA_PITCH;
+            cameraZoom = DEFAULT_CAMERA_ZOOM;
+
+            // Mettre à jour les sliders dans l'interface utilisateur
+            cameraYawSlider.value = cameraYaw;
+            cameraPitchSlider.value = cameraPitch;
+            cameraZoomSlider.value = cameraZoom;
+
+            updateCameraPosition(); // Appliquer les nouvelles valeurs à la caméra
+        }
+
+        // --- ANIMATION ET REDIMENSIONNEMENT ---
+        function animate() {
+            requestAnimationFrame(animate);
+            renderer.render(scene, camera); // Rend la scène
+        }
+
+        function onWindowResize() {
+            // Ajuste la caméra et le rendu à la nouvelle taille du conteneur
+            camera.aspect = container.clientWidth / container.clientHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(container.clientWidth, container.clientHeight);
+
+            // Réajuste la hauteur maximale pour les détails ouverts lors du redimensionnement
+            document.querySelectorAll('details[open]').forEach(detail => {
+                const content = detail.querySelector('.details-content');
+                if (content) {
+                    content.style.maxHeight = 'none'; // Désactive temporairement pour obtenir la bonne scrollHeight
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }
+            });
+        }
+
+        // --- ÉCOUTEURS D'ÉVÉNEMENTS ---
+        document.querySelectorAll('.preset-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const [l, w, h] = button.dataset.dims.split(',').map(Number);
+                currentDimensions.l = l;
+                currentDimensions.w = w;
+                currentDimensions.h = h;
+                updateVisualization();
+            });
+        });
+        
+        document.querySelectorAll('input[name="base-dim"]').forEach(radio => {
+            radio.addEventListener('change', () => {
+                const baseDim = document.querySelector('input[name="base-dim"]:checked').value;
+                if (baseDim === 'length') {
+                    baseValueInput.value = currentDimensions.l.toFixed(1);
+                } else { // baseDim is 'width'
+                    currentDimensions.w = parseFloat(baseValueInput.value); 
+                    baseValueInput.value = currentDimensions.w.toFixed(1);
+                }
+            });
+        });
+
+        document.querySelectorAll('.ratio-btn').forEach(button => {
+            button.addEventListener('click', () => {
+                const ratio = parseFloat(button.dataset.ratio);
+                const baseValue = parseFloat(document.getElementById('base-value').value);
+                const baseDim = document.querySelector('input[name="base-dim"]:checked').value;
+
+                if (isNaN(baseValue) || baseValue <= 0) {
+                     console.error("Veuillez entrer une valeur numérique positive pour la base.");
+                    return;
+                }
+
+                if (baseDim === 'length') {
+                    currentDimensions.l = baseValue;
+                    currentDimensions.w = baseValue / ratio;
+                } else { // baseDim is 'width'
+                    currentDimensions.w = baseValue;
+                    currentDimensions.l = baseValue * ratio;
+                }
+                // Appliquez également le ratio à la hauteur pour un résultat cohérent
+                currentDimensions.h = currentDimensions.w / ratio;
+
+                updateVisualization();
+            });
+        });
+
+        heightSlider.addEventListener('input', (e) => {
+            currentDimensions.h = parseFloat(e.target.value);
+            updateVisualization();
+        });
+
+        // Gère le bouton "Appliquer les dimensions" pour la saisie manuelle
+        applyManualDimsButton.addEventListener('click', () => {
+            const l = parseFloat(manualLengthInput.value);
+            const w = parseFloat(manualWidthInput.value);
+            const h = parseFloat(manualHeightInput.value);
+
+            if (isNaN(l) || isNaN(w) || isNaN(h) || l <= 0 || w <= 0 || h <= 0) {
+                console.error("Veuillez entrer des valeurs numériques positives valides pour toutes les dimensions manuelles.");
+                return;
+            }
+
+            currentDimensions.l = l;
+            currentDimensions.w = w;
+            currentDimensions.h = h;
+            updateVisualization();
+        });
+
+        // Écouteur pour la modification du champ de base
+        baseValueInput.addEventListener('input', (e) => {
+            const baseValue = parseFloat(e.target.value);
+            const activeRatioButton = document.querySelector('.ratio-btn.active'); // Si vous avez une classe 'active'
+            if (!isNaN(baseValue) && baseValue > 0 && activeRatioButton) {
+                // Supprime la classe active de tous les boutons de ratio et l'ajoute à celui qui était précédemment actif
+                document.querySelectorAll('.ratio-btn').forEach(btn => btn.classList.remove('active'));
+                activeRatioButton.classList.add('active'); 
+                activeRatioButton.click(); 
+            } else if (!isNaN(baseValue) && baseValue > 0) {
+                const baseDim = document.querySelector('input[name="base-dim"]:checked').value;
+                if (baseDim === 'length') {
+                    currentDimensions.l = baseValue;
+                } else {
+                    currentDimensions.w = baseValue;
+                }
+                updateVisualization();
+            }
+        });
+
+        // Nouveaux écouteurs pour les sliders de caméra
+        cameraYawSlider.addEventListener('input', (e) => {
+            cameraYaw = parseFloat(e.target.value);
+            updateCameraPosition();
+        });
+
+        cameraPitchSlider.addEventListener('input', (e) => {
+            cameraPitch = parseFloat(e.target.value);
+            updateCameraPosition();
+        });
+
+        cameraZoomSlider.addEventListener('input', (e) => {
+            cameraZoom = parseFloat(e.target.value);
+            updateCameraPosition();
+        });
+
+        // --- Logique des détails (Accordéon) ---
+        document.querySelectorAll('details').forEach(detail => {
+            const content = detail.querySelector('.details-content');
+            if (!content) return;
+
+            const updateMaxHeight = () => {
+                if (detail.open) {
+                    // Définit la hauteur maximale sur la hauteur de défilement du contenu pour l'animation
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                } else {
+                    // Définit la hauteur maximale à 0 pour la fermeture
+                    content.style.maxHeight = '0';
+                }
+            };
+
+            // Définit la hauteur maximale initiale
+            updateMaxHeight();
+
+            // Écoute l'événement 'toggle' des détails
+            detail.addEventListener('toggle', updateMaxHeight);
+
+            // Recalcule la hauteur maximale lors du redimensionnement de la fenêtre pour les détails ouverts
+            window.addEventListener('resize', () => {
+                if (detail.open) {
+                    // Désactive temporairement la hauteur maximale pour obtenir une scrollHeight précise
+                    content.style.maxHeight = 'none'; 
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }
+            });
+        });
+
+        // --- Logique de bascule de la barre latérale ---
+        const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebar = document.getElementById('sidebar');
+        const sidebarOverlay = document.getElementById('sidebar-overlay');
+        const body = document.body;
+
+        function toggleSidebar() {
+            body.classList.toggle('sidebar-open');
+        }
+
+        sidebarToggle.addEventListener('click', toggleSidebar);
+        sidebarOverlay.addEventListener('click', toggleSidebar); // Ferme la barre latérale en cliquant sur le calque d'arrière-plan
+
+        // Ferme la barre latérale si la taille de l'écran devient grande (desktop)
+        window.addEventListener('resize', () => {
+            if (window.innerWidth >= 1024) { // Point de rupture 'lg' de Tailwind
+                body.classList.remove('sidebar-open'); // S'assure qu'elle n'est pas "off-canvas" sur le bureau
+            }
+        });
+
+        // --- INITIALISATION ---
+        initScene();
+        updateVisualization(); // Affiche la boîte initiale au chargement
+
+    </script>
+</body>
+</html>
