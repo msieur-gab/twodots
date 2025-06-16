@@ -15,13 +15,14 @@
             overflow: hidden; /* Empêche le défilement global de la page */
         }
         /* Conteneur du canvas pour remplir l'espace disponible */
-        #main-content { /* Changé de #canvas-container pour correspondre au HTML */
+        #main-content {
             width: 100%;
             height: 100%;
             cursor: grab; /* Curseur "grab" réactivé pour le drag */
             display: flex;
             justify-content: center;
             align-items: center;
+            position: relative; /* Pour positionner l'overlay des dimensions à l'intérieur si besoin */
         }
         canvas {
             display: block;
@@ -132,10 +133,16 @@
 
     <!-- Panneau Latéral (Sidebar) -->
     <div id="sidebar" class="fixed top-0 left-0 h-full w-full sm:w-80 bg-white shadow-xl p-4 sm:p-6 flex flex-col overflow-y-auto z-50 transition-transform duration-300 ease-in-out">
-        <div class="text-center mb-6">
+        <div class="flex justify-between items-center mb-6">
             <h1 class="text-2xl sm:text-3xl font-bold text-gray-900">Boîte 3D Designer</h1>
-            <p class="text-gray-600 mt-2">Choisissez ou créez votre boîte sur mesure.</p>
+            <!-- Bouton de fermeture de la barre latérale (visible sur mobile) -->
+            <button id="sidebar-close-button" class="lg:hidden p-2 rounded-full hover:bg-gray-200 transition-colors duration-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
         </div>
+        <p class="text-gray-600 mt-2 text-center">Choisissez ou créez votre boîte sur mesure.</p>
 
         <!-- Section Modèles Prédéfinis -->
         <details class="bg-gray-50 p-4 rounded-lg border mb-4" open> <!-- Ouvert par défaut -->
@@ -228,15 +235,16 @@
                 <button id="resetViewButton" class="btn bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg transition-all duration-200 mt-2 w-full">Réinitialiser la Vue</button>
             </div>
         </details>
-
-        <div class="text-center bg-blue-50 border border-blue-200 text-blue-800 rounded-lg p-4 mt-auto">
-            <h2 class="font-bold text-lg">Dimensions Finales</h2>
-            <p id="dimensions-text" class="text-2xl font-mono mt-1"></p>
-        </div>
     </div>
 
     <!-- Zone de Visualisation 3D (Main Content) -->
     <div id="main-content" class="flex-grow bg-gray-200 rounded-none border-l border-gray-300 overflow-hidden"></div>
+
+    <!-- Overlay des Dimensions Finales -->
+    <div id="dimensions-overlay" class="fixed top-4 right-4 z-30 bg-white bg-opacity-85 backdrop-filter backdrop-blur-sm p-3 rounded-lg shadow-md text-center border border-gray-200 lg:top-4 lg:right-4">
+        <h2 class="font-bold text-sm text-gray-800">Dimensions Finales</h2>
+        <p id="dimensions-text" class="text-base font-mono mt-1 text-gray-900"></p>
+    </div>
 
     <!-- Librairies Three.js -->
     <script type="importmap">
@@ -255,9 +263,7 @@
         let scene, camera, renderer, currentBox = null;
         let currentDimensions = { l: 26, w: 16, h: 10 }; // Dimensions initiales
 
-        // Correction: Utiliser 'main-content' car c'est l'ID du conteneur dans le HTML
         const container = document.getElementById('main-content');
-        // Créer l'élément canvas dynamiquement et l'ajouter au conteneur
         const canvas = document.createElement('canvas'); 
         container.appendChild(canvas); 
 
@@ -697,24 +703,16 @@
 
             const updateMaxHeight = () => {
                 if (detail.open) {
-                    // Définit la hauteur maximale sur la hauteur de défilement du contenu pour l'animation
                     content.style.maxHeight = content.scrollHeight + 'px';
                 } else {
-                    // Définit la hauteur maximale à 0 pour la fermeture
                     content.style.maxHeight = '0';
                 }
             };
 
-            // Définit la hauteur maximale initiale
             updateMaxHeight();
-
-            // Écoute l'événement 'toggle' des détails
             detail.addEventListener('toggle', updateMaxHeight);
-
-            // Recalcule la hauteur maximale lors du redimensionnement de la fenêtre pour les détails ouverts
             window.addEventListener('resize', () => {
                 if (detail.open) {
-                    // Désactive temporairement la hauteur maximale pour obtenir une scrollHeight précise
                     content.style.maxHeight = 'none'; 
                     content.style.maxHeight = content.scrollHeight + 'px';
                 }
@@ -723,6 +721,7 @@
 
         // --- Logique de bascule de la barre latérale ---
         const sidebarToggle = document.getElementById('sidebar-toggle');
+        const sidebarCloseButton = document.getElementById('sidebar-close-button'); // Nouveau bouton de fermeture
         const sidebar = document.getElementById('sidebar');
         const sidebarOverlay = document.getElementById('sidebar-overlay');
         const body = document.body;
@@ -732,18 +731,18 @@
         }
 
         sidebarToggle.addEventListener('click', toggleSidebar);
-        sidebarOverlay.addEventListener('click', toggleSidebar); // Ferme la barre latérale en cliquant sur le calque d'arrière-plan
+        sidebarCloseButton.addEventListener('click', toggleSidebar); // L'écouteur pour le nouveau bouton de fermeture
+        sidebarOverlay.addEventListener('click', toggleSidebar);
 
-        // Ferme la barre latérale si la taille de l'écran devient grande (desktop)
         window.addEventListener('resize', () => {
-            if (window.innerWidth >= 1024) { // Point de rupture 'lg' de Tailwind
-                body.classList.remove('sidebar-open'); // S'assure qu'elle n'est pas "off-canvas" sur le bureau
+            if (window.innerWidth >= 1024) {
+                body.classList.remove('sidebar-open');
             }
         });
 
         // --- INITIALISATION ---
         initScene();
-        updateVisualization(); // Affiche la boîte initiale au chargement
+        updateVisualization();
 
     </script>
 </body>
